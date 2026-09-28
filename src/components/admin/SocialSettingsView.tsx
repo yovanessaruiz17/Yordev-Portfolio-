@@ -40,10 +40,10 @@ export const SocialSettingsView: React.FC = () => {
     ? `https://wa.me/${cleanDigits}${whatsappMessage ? `?text=${encodeURIComponent(whatsappMessage)}` : ''}`
     : socialLinks.whatsapp || '#';
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    updateSocialLinks({
+    await updateSocialLinks({
       whatsappNumber: whatsappNumber.trim(),
       whatsappMessage: whatsappMessage.trim(),
       whatsapp: computedWhatsAppUrl,

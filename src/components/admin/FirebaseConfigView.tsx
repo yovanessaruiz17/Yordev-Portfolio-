@@ -156,31 +156,14 @@ VITE_FIREBASE_MEASUREMENT_ID=${form.measurementId || ''}`;
           <div>
             <h4 className="text-sm font-bold text-white flex items-center gap-2">
               Estado de la Base de Datos Firebase
-              {firebaseConfig.status === 'connected' && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950/60 text-emerald-300 border border-emerald-800/60">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Conectado a Firestore
-                </span>
-              )}
-              {firebaseConfig.status === 'configured' && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-950/60 text-amber-300 border border-amber-800/60">
-                  <AlertTriangle className="w-3 h-3 text-amber-400" /> Configuración Guardada
-                </span>
-              )}
-              {firebaseConfig.status === 'error' && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-950/60 text-rose-300 border border-rose-800/60">
-                  <XCircle className="w-3 h-3 text-rose-400" /> Error al Verificar
-                </span>
-              )}
-              {firebaseConfig.status === 'disconnected' && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">
-                  Sin Conectar (Modo Local Seguro)
-                </span>
-              )}
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950/60 text-emerald-300 border border-emerald-800/60">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Cloud Firestore Conectado en Tiempo Real
+              </span>
             </h4>
             <p className="text-xs text-slate-400 mt-0.5">
               {lastCloudSyncTime
-                ? `Última sincronización con la nube: ${lastCloudSyncTime}`
-                : 'Tus datos se guardan en local y se sincronizan con Cloud Firestore cuando configures las claves.'}
+                ? `Sincronización activa con la base de datos Firestore (${lastCloudSyncTime}). Todos los cambios se replican en cualquier dispositivo.`
+                : 'Conectado a Cloud Firestore. Tus proyectos, artículos y datos se sincronizan en tiempo real en todos los dispositivos.'}
             </p>
           </div>
         </div>

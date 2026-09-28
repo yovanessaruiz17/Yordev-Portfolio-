@@ -1,305 +1,260 @@
-import { Project, BlogPost, FirebaseConfig } from '../types';
+import {
+  collection,
+  doc,
+  setDoc,
+  deleteDoc,
+  getDocs,
+  getDoc,
+  onSnapshot,
+  writeBatch,
+  Unsubscribe,
+} from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../firebase';
+import { Project, BlogPost, FirebaseConfig, SocialLinks } from '../types';
+
+export const PROJECTS_COLLECTION = 'proyectos';
+export const BLOG_COLLECTION = 'articulos_blog';
+export const CONFIG_COLLECTION = 'configuracion';
+export const COMPANY_DOC_ID = 'empresa';
 
 /**
- * Utilidades para interactuar directamente con la API REST de Google Cloud Firestore.
- * Esto permite sincronización bidireccional en Netlify sin necesidad de librerías pesadas.
+ * Obtiene todos los proyectos directamente desde Firestore
  */
-
-function toFirestoreFields(obj: Record<string, any>): Record<string, any> {
-  const fields: Record<string, any> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    fields[key] = toFirestoreValue(value);
-  }
-  return fields;
-}
-
-function toFirestoreValue(val: any): any {
-  if (val === null || val === undefined) {
-    return { nullValue: null };
-  }
-  if (typeof val === 'boolean') {
-    return { booleanValue: val };
-  }
-  if (typeof val === 'number') {
-    return Number.isInteger(val) ? { integerValue: val.toString() } : { doubleValue: val };
-  }
-  if (typeof val === 'string') {
-    return { stringValue: val };
-  }
-  if (Array.isArray(val)) {
-    return { arrayValue: { values: val.map(toFirestoreValue) } };
-  }
-  if (typeof val === 'object') {
-    const mapFields: Record<string, any> = {};
-    for (const [k, v] of Object.entries(val)) {
-      mapFields[k] = toFirestoreValue(v);
-    }
-    return { mapValue: { fields: mapFields } };
-  }
-  return { stringValue: String(val) };
-}
-
-function fromFirestoreValue(val: any): any {
-  if (!val) return null;
-  if ('stringValue' in val) return val.stringValue;
-  if ('integerValue' in val) return parseInt(val.integerValue, 10);
-  if ('doubleValue' in val) return parseFloat(val.doubleValue);
-  if ('booleanValue' in val) return val.booleanValue;
-  if ('nullValue' in val) return null;
-  if ('arrayValue' in val) {
-    return (val.arrayValue.values || []).map(fromFirestoreValue);
-  }
-  if ('mapValue' in val) {
-    const res: Record<string, any> = {};
-    for (const [k, v] of Object.entries(val.mapValue.fields || {})) {
-      res[k] = fromFirestoreValue(v);
-    }
-    return res;
-  }
-  return null;
-}
-
-function fromFirestoreDocument(doc: any): any {
-  if (!doc || !doc.fields) return null;
-  const res: Record<string, any> = {};
-  for (const [key, val] of Object.entries(doc.fields)) {
-    res[key] = fromFirestoreValue(val);
-  }
-  // Extraer el ID del documento si no está en fields
-  if (!res.id && doc.name) {
-    const parts = doc.name.split('/');
-    const docId = parts[parts.length - 1];
-    const numId = parseInt(docId, 10);
-    res.id = isNaN(numId) ? docId : numId;
-  }
-  return res;
-}
-
-/**
- * Obtiene todos los proyectos almacenados en Cloud Firestore
- */
-export async function fetchProjectsFromFirestore(config: FirebaseConfig): Promise<{ success: boolean; projects?: Project[]; error?: string }> {
-  if (!config.projectId.trim()) {
-    return { success: false, error: 'Project ID no configurado.' };
-  }
-
-  const collection = config.projectsCollection.trim() || 'proyectos';
-  const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(
-    config.projectId.trim()
-  )}/databases/(default)/documents/${encodeURIComponent(collection)}${
-    config.apiKey.trim() ? `?key=${encodeURIComponent(config.apiKey.trim())}` : ''
-  }`;
-
+export async function fetchProjectsFromFirestore(): Promise<{ success: boolean; projects?: Project[]; error?: string }> {
   try {
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-    });
-
-    if (!res.ok) {
-      if (res.status === 404) {
-        return { success: true, projects: [] }; // Colección vacía
+    const snapshot = await getDocs(collection(db, PROJECTS_COLLECTION));
+    const projects: Project[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as Project;
+      if (data && data.titulo) {
+        projects.push({ ...data, id: Number(data.id || docSnap.id) });
       }
-      return { success: false, error: `Error ${res.status}: ${res.statusText}` };
-    }
-
-    const data = await res.json();
-    if (!data.documents || !Array.isArray(data.documents)) {
-      return { success: true, projects: [] };
-    }
-
-    const loadedProjects: Project[] = data.documents
-      .map((doc: any) => fromFirestoreDocument(doc))
-      .filter((p: any) => p && p.titulo && typeof p.id === 'number');
-
-    // Ordenar por ID descendente
-    loadedProjects.sort((a, b) => b.id - a.id);
-    return { success: true, projects: loadedProjects };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Error de red al consultar Firestore' };
+    });
+    projects.sort((a, b) => b.id - a.id);
+    return { success: true, projects };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, PROJECTS_COLLECTION);
+    return { success: false, error: error instanceof Error ? error.message : 'Error al obtener proyectos' };
   }
 }
 
 /**
- * Obtiene todos los artículos del blog almacenados en Cloud Firestore
+ * Obtiene todos los artículos del blog directamente desde Firestore
  */
-export async function fetchBlogPostsFromFirestore(config: FirebaseConfig): Promise<{ success: boolean; blogPosts?: BlogPost[]; error?: string }> {
-  if (!config.projectId.trim()) {
-    return { success: false, error: 'Project ID no configurado.' };
-  }
-
-  const collection = config.blogCollection.trim() || 'articulos_blog';
-  const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(
-    config.projectId.trim()
-  )}/databases/(default)/documents/${encodeURIComponent(collection)}${
-    config.apiKey.trim() ? `?key=${encodeURIComponent(config.apiKey.trim())}` : ''
-  }`;
-
+export async function fetchBlogPostsFromFirestore(): Promise<{ success: boolean; blogPosts?: BlogPost[]; error?: string }> {
   try {
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-    });
-
-    if (!res.ok) {
-      if (res.status === 404) {
-        return { success: true, blogPosts: [] };
+    const snapshot = await getDocs(collection(db, BLOG_COLLECTION));
+    const posts: BlogPost[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as BlogPost;
+      if (data && data.titulo) {
+        posts.push({ ...data, id: Number(data.id || docSnap.id) });
       }
-      return { success: false, error: `Error ${res.status}: ${res.statusText}` };
-    }
-
-    const data = await res.json();
-    if (!data.documents || !Array.isArray(data.documents)) {
-      return { success: true, blogPosts: [] };
-    }
-
-    const loadedPosts: BlogPost[] = data.documents
-      .map((doc: any) => fromFirestoreDocument(doc))
-      .filter((b: any) => b && b.titulo && typeof b.id === 'number');
-
-    loadedPosts.sort((a, b) => b.id - a.id);
-    return { success: true, blogPosts: loadedPosts };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Error de red al consultar Firestore' };
-  }
-}
-
-/**
- * Guarda o actualiza un documento de proyecto individual en Cloud Firestore
- */
-export async function saveProjectToFirestore(config: FirebaseConfig, project: Project): Promise<{ success: boolean; error?: string }> {
-  if (!config.projectId.trim()) {
-    return { success: false, error: 'Project ID no configurado' };
-  }
-
-  const collection = config.projectsCollection.trim() || 'proyectos';
-  const docId = String(project.id);
-  const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(
-    config.projectId.trim()
-  )}/databases/(default)/documents/${encodeURIComponent(collection)}/${encodeURIComponent(docId)}${
-    config.apiKey.trim() ? `?key=${encodeURIComponent(config.apiKey.trim())}` : ''
-  }`;
-
-  try {
-    const fields = toFirestoreFields(project);
-    const res = await fetch(url, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({ fields }),
     });
-
-    if (!res.ok) {
-      return { success: false, error: `Error ${res.status}: Verifica las reglas de Firestore` };
-    }
-
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Error de red al guardar proyecto en Firestore' };
+    posts.sort((a, b) => b.id - a.id);
+    return { success: true, blogPosts: posts };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, BLOG_COLLECTION);
+    return { success: false, error: error instanceof Error ? error.message : 'Error al obtener artículos' };
   }
 }
 
 /**
- * Guarda o actualiza un documento de artículo de blog en Cloud Firestore
+ * Obtiene los datos de la empresa y redes de contacto desde Firestore
  */
-export async function saveBlogPostToFirestore(config: FirebaseConfig, post: BlogPost): Promise<{ success: boolean; error?: string }> {
-  if (!config.projectId.trim()) {
-    return { success: false, error: 'Project ID no configurado' };
-  }
-
-  const collection = config.blogCollection.trim() || 'articulos_blog';
-  const docId = String(post.id);
-  const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(
-    config.projectId.trim()
-  )}/databases/(default)/documents/${encodeURIComponent(collection)}/${encodeURIComponent(docId)}${
-    config.apiKey.trim() ? `?key=${encodeURIComponent(config.apiKey.trim())}` : ''
-  }`;
-
+export async function fetchCompanyConfigFromFirestore(): Promise<{ success: boolean; config?: Partial<SocialLinks>; error?: string }> {
   try {
-    const fields = toFirestoreFields(post);
-    const res = await fetch(url, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({ fields }),
-    });
-
-    if (!res.ok) {
-      return { success: false, error: `Error ${res.status}: Verifica las reglas de Firestore` };
+    const docRef = doc(db, CONFIG_COLLECTION, COMPANY_DOC_ID);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return { success: true, config: snap.data() as Partial<SocialLinks> };
     }
-
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Error de red al guardar artículo en Firestore' };
+    return { success: true, config: undefined };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, `${CONFIG_COLLECTION}/${COMPANY_DOC_ID}`);
+    return { success: false, error: error instanceof Error ? error.message : 'Error al obtener configuración' };
   }
 }
 
 /**
- * Elimina un documento de Cloud Firestore
+ * Guarda o actualiza un proyecto en Firestore
  */
-export async function deleteDocumentFromFirestore(config: FirebaseConfig, collection: string, id: number): Promise<{ success: boolean; error?: string }> {
-  if (!config.projectId.trim()) {
-    return { success: false, error: 'Project ID no configurado' };
-  }
-
-  const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(
-    config.projectId.trim()
-  )}/databases/(default)/documents/${encodeURIComponent(collection)}/${encodeURIComponent(String(id))}${
-    config.apiKey.trim() ? `?key=${encodeURIComponent(config.apiKey.trim())}` : ''
-  }`;
-
+export async function saveProjectToFirestore(_config: FirebaseConfig, project: Project): Promise<{ success: boolean; error?: string }> {
+  const path = `${PROJECTS_COLLECTION}/${project.id}`;
   try {
-    const res = await fetch(url, {
-      method: 'DELETE',
-      headers: { Accept: 'application/json' },
-    });
-
-    if (!res.ok && res.status !== 404) {
-      return { success: false, error: `Error ${res.status} al eliminar documento` };
-    }
-
+    const docRef = doc(db, PROJECTS_COLLECTION, String(project.id));
+    const payload = {
+      ...project,
+      updatedAt: new Date().toISOString(),
+    };
+    await setDoc(docRef, payload, { merge: true });
     return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Error de red al eliminar en Firestore' };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+    return { success: false, error: error instanceof Error ? error.message : 'Error al guardar proyecto' };
   }
 }
 
 /**
- * Sube por lote (batch sync) todos los proyectos y artículos locales hacia Firestore
+ * Guarda o actualiza un artículo del blog en Firestore
+ */
+export async function saveBlogPostToFirestore(_config: FirebaseConfig, post: BlogPost): Promise<{ success: boolean; error?: string }> {
+  const path = `${BLOG_COLLECTION}/${post.id}`;
+  try {
+    const docRef = doc(db, BLOG_COLLECTION, String(post.id));
+    const payload = {
+      ...post,
+      updatedAt: new Date().toISOString(),
+    };
+    await setDoc(docRef, payload, { merge: true });
+    return { success: true };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+    return { success: false, error: error instanceof Error ? error.message : 'Error al guardar artículo' };
+  }
+}
+
+/**
+ * Guarda la configuración de la empresa y redes en Firestore
+ */
+export async function saveCompanyConfigToFirestore(links: SocialLinks): Promise<{ success: boolean; error?: string }> {
+  const path = `${CONFIG_COLLECTION}/${COMPANY_DOC_ID}`;
+  try {
+    const docRef = doc(db, CONFIG_COLLECTION, COMPANY_DOC_ID);
+    const payload = {
+      ...links,
+      updatedAt: new Date().toISOString(),
+    };
+    await setDoc(docRef, payload, { merge: true });
+    return { success: true };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+    return { success: false, error: error instanceof Error ? error.message : 'Error al guardar datos de empresa' };
+  }
+}
+
+/**
+ * Elimina un documento (proyecto o blog) de Firestore
+ */
+export async function deleteDocumentFromFirestore(_config: FirebaseConfig, collectionName: string, id: number): Promise<{ success: boolean; error?: string }> {
+  const path = `${collectionName}/${id}`;
+  try {
+    const docRef = doc(db, collectionName, String(id));
+    await deleteDoc(docRef);
+    return { success: true };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+    return { success: false, error: error instanceof Error ? error.message : 'Error al eliminar documento' };
+  }
+}
+
+/**
+ * Suscripción en tiempo real a la colección de Proyectos
+ */
+export function subscribeToProjects(onUpdate: (projects: Project[]) => void, onError?: (err: any) => void): Unsubscribe {
+  const colRef = collection(db, PROJECTS_COLLECTION);
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const items: Project[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as Project;
+        if (data && data.titulo) {
+          items.push({ ...data, id: Number(data.id || docSnap.id) });
+        }
+      });
+      items.sort((a, b) => b.id - a.id);
+      onUpdate(items);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.GET, PROJECTS_COLLECTION);
+      if (onError) onError(error);
+    }
+  );
+}
+
+/**
+ * Suscripción en tiempo real a la colección de Blog
+ */
+export function subscribeToBlogPosts(onUpdate: (posts: BlogPost[]) => void, onError?: (err: any) => void): Unsubscribe {
+  const colRef = collection(db, BLOG_COLLECTION);
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const items: BlogPost[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as BlogPost;
+        if (data && data.titulo) {
+          items.push({ ...data, id: Number(data.id || docSnap.id) });
+        }
+      });
+      items.sort((a, b) => b.id - a.id);
+      onUpdate(items);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.GET, BLOG_COLLECTION);
+      if (onError) onError(error);
+    }
+  );
+}
+
+/**
+ * Suscripción en tiempo real a la configuración de la empresa
+ */
+export function subscribeToCompanyConfig(onUpdate: (links: SocialLinks) => void, onError?: (err: any) => void): Unsubscribe {
+  const docRef = doc(db, CONFIG_COLLECTION, COMPANY_DOC_ID);
+  return onSnapshot(
+    docRef,
+    (snap) => {
+      if (snap.exists()) {
+        const data = snap.data() as SocialLinks;
+        onUpdate(data);
+      }
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.GET, `${CONFIG_COLLECTION}/${COMPANY_DOC_ID}`);
+      if (onError) onError(error);
+    }
+  );
+}
+
+/**
+ * Sube todos los proyectos y artículos iniciales en lote (batch) a Cloud Firestore
  */
 export async function pushAllToFirestore(
-  config: FirebaseConfig,
+  _config: FirebaseConfig,
   projects: Project[],
-  blogPosts: BlogPost[]
-): Promise<{ success: boolean; uploadedProjects: number; uploadedBlog: number; error?: string }> {
-  if (!config.projectId.trim()) {
-    return { success: false, uploadedProjects: 0, uploadedBlog: 0, error: 'Project ID no configurado' };
-  }
+  blogPosts: BlogPost[],
+  socialLinks?: SocialLinks
+): Promise<{ success: boolean; error?: string; projectCount?: number; blogCount?: number }> {
+  try {
+    const batch = writeBatch(db);
+    const nowIso = new Date().toISOString();
 
-  let projCount = 0;
-  let blogCount = 0;
-
-  for (const proj of projects) {
-    const res = await saveProjectToFirestore(config, proj);
-    if (res.success) {
-      projCount++;
+    for (const project of projects) {
+      const docRef = doc(db, PROJECTS_COLLECTION, String(project.id));
+      batch.set(docRef, { ...project, updatedAt: nowIso }, { merge: true });
     }
-  }
 
-  for (const post of blogPosts) {
-    const res = await saveBlogPostToFirestore(config, post);
-    if (res.success) {
-      blogCount++;
+    for (const post of blogPosts) {
+      const docRef = doc(db, BLOG_COLLECTION, String(post.id));
+      batch.set(docRef, { ...post, updatedAt: nowIso }, { merge: true });
     }
-  }
 
-  return {
-    success: true,
-    uploadedProjects: projCount,
-    uploadedBlog: blogCount,
-  };
+    if (socialLinks) {
+      const docRef = doc(db, CONFIG_COLLECTION, COMPANY_DOC_ID);
+      batch.set(docRef, { ...socialLinks, updatedAt: nowIso }, { merge: true });
+    }
+
+    await batch.commit();
+
+    return {
+      success: true,
+      projectCount: projects.length,
+      blogCount: blogPosts.length,
+    };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, 'batch/pushAll');
+    return { success: false, error: error instanceof Error ? error.message : 'Error al sincronizar en lote con Firestore' };
+  }
 }

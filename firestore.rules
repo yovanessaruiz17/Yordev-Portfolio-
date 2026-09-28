@@ -1,0 +1,60 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function isValidProject(data) {
+      return data.id is number
+        && data.titulo is string && data.titulo.size() > 0 && data.titulo.size() <= 200
+        && data.descripcion is string && data.descripcion.size() <= 1000;
+    }
+
+    function isValidBlogPost(data) {
+      return data.id is number
+        && data.titulo is string && data.titulo.size() > 0 && data.titulo.size() <= 250
+        && data.extracto is string && data.extracto.size() <= 1000;
+    }
+
+    function isValidCompanyConfig(data) {
+      return (!('email' in data) || (data.email is string && data.email.size() <= 150))
+        && (!('nombre' in data) || (data.nombre is string && data.nombre.size() <= 100));
+    }
+
+    // Colección de verificación de conectividad
+    match /test/{testId} {
+      allow read: if true;
+    }
+
+    // Colección de Proyectos del Portafolio
+    match /proyectos/{projectId} {
+      allow read: if true;
+      allow create, update: if isValidId(projectId) && isValidProject(incoming());
+      allow delete: if isValidId(projectId);
+    }
+
+    // Colección de Artículos del Blog Técnico
+    match /articulos_blog/{postId} {
+      allow read: if true;
+      allow create, update: if isValidId(postId) && isValidBlogPost(incoming());
+      allow delete: if isValidId(postId);
+    }
+
+    // Colección de Configuración de Empresa y Redes de Contacto
+    match /configuracion/{configId} {
+      allow read: if true;
+      allow create, update: if isValidId(configId) && isValidCompanyConfig(incoming());
+      allow delete: if isValidId(configId);
+    }
+  }
+}

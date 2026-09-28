@@ -1,0 +1,89 @@
+{
+  "entities": {
+    "TestConnection": {
+      "title": "TestConnection",
+      "description": "Diagnostic document used to verify Firestore connectivity",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "description": "Connection test status", "maxLength": 50 }
+      }
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Portafolio project definition showcase by Yorleidys Ruiz",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number", "description": "Unique numeric project identifier" },
+        "titulo": { "type": "string", "description": "Project title", "maxLength": 200 },
+        "descripcion": { "type": "string", "description": "Short project summary", "maxLength": 1000 },
+        "descripcionLarga": { "type": "string", "description": "In-depth project breakdown", "maxLength": 10000 },
+        "categoria": { "type": "string", "description": "Category or industry", "maxLength": 100 },
+        "destacado": { "type": "boolean", "description": "Whether project is highlighted on homepage" },
+        "imagen": { "type": "string", "description": "Image URL or banner", "maxLength": 2000 },
+        "enlace": { "type": "string", "description": "Live preview URL", "maxLength": 1000 },
+        "github": { "type": "string", "description": "Repository URL", "maxLength": 1000 },
+        "metricas": { "type": "string", "description": "Performance metric badge", "maxLength": 200 },
+        "fecha": { "type": "string", "description": "Publication or delivery date", "maxLength": 50 },
+        "orden": { "type": "number", "description": "Display order weight" },
+        "updatedAt": { "type": "string", "description": "Last modification ISO timestamp", "maxLength": 100 }
+      },
+      "required": ["id", "titulo", "descripcion"]
+    },
+    "BlogPost": {
+      "title": "BlogPost",
+      "description": "Technical article published on YorDev Blog",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number", "description": "Unique numeric article identifier" },
+        "titulo": { "type": "string", "description": "Article title", "maxLength": 250 },
+        "extracto": { "type": "string", "description": "Article excerpt or teaser", "maxLength": 1000 },
+        "contenido": { "type": "string", "description": "Full markdown or text body", "maxLength": 50000 },
+        "categoria": { "type": "string", "description": "Primary article topic", "maxLength": 100 },
+        "imagen": { "type": "string", "description": "Cover image URL", "maxLength": 2000 },
+        "fecha": { "type": "string", "description": "Publication date string", "maxLength": 50 },
+        "tiempoLectura": { "type": "string", "description": "Estimated read time", "maxLength": 50 },
+        "autor": { "type": "string", "description": "Author name", "maxLength": 100 },
+        "destacado": { "type": "boolean", "description": "Featured article flag" },
+        "updatedAt": { "type": "string", "description": "Last modification ISO timestamp", "maxLength": 100 }
+      },
+      "required": ["id", "titulo", "extracto"]
+    },
+    "CompanyInfo": {
+      "title": "CompanyInfo",
+      "description": "Company, profile and contact settings for YorDev portfolio",
+      "type": "object",
+      "properties": {
+        "nombre": { "type": "string", "description": "Owner or company display name", "maxLength": 100 },
+        "tituloProfesional": { "type": "string", "description": "Professional title or role", "maxLength": 150 },
+        "email": { "type": "string", "description": "Contact email address", "maxLength": 150 },
+        "telefono": { "type": "string", "description": "Contact phone or WhatsApp", "maxLength": 50 },
+        "ubicacion": { "type": "string", "description": "Geographical location", "maxLength": 100 },
+        "github": { "type": "string", "description": "GitHub profile URL", "maxLength": 500 },
+        "linkedin": { "type": "string", "description": "LinkedIn profile URL", "maxLength": 500 },
+        "instagram": { "type": "string", "description": "Instagram profile URL", "maxLength": 500 },
+        "whatsapp": { "type": "string", "description": "WhatsApp direct link or number", "maxLength": 500 },
+        "sobreMi": { "type": "string", "description": "Short bio description", "maxLength": 2000 },
+        "updatedAt": { "type": "string", "description": "Last update ISO timestamp", "maxLength": 100 }
+      },
+      "required": ["email"]
+    }
+  },
+  "firestore": {
+    "/test/{testId}": {
+      "schema": { "$ref": "#/entities/TestConnection" },
+      "description": "Diagnostic documents for verifying backend connectivity"
+    },
+    "/proyectos/{projectId}": {
+      "schema": { "$ref": "#/entities/Project" },
+      "description": "Showcase portfolio projects readable by everyone and managed by admin"
+    },
+    "/articulos_blog/{postId}": {
+      "schema": { "$ref": "#/entities/BlogPost" },
+      "description": "Technical blog articles readable by everyone and managed by admin"
+    },
+    "/configuracion/{configId}": {
+      "schema": { "$ref": "#/entities/CompanyInfo" },
+      "description": "Global company, social networks and contact configuration"
+    }
+  }
+}
