@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 150" fill="none">
+  <defs>
+    <linearGradient id="yrLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9333ea" />
+      <stop offset="100%" stop-color="#7c3aed" />
+    </linearGradient>
+  </defs>
+
+  <g id="yr-monogram">
+    <!-- Sparkle Star at Top Left -->
+    <path
+      d="M38 4 Q38 18 24 18 Q38 18 38 32 Q38 18 52 18 Q38 18 38 4 Z"
+      fill="#c084fc"
+    />
+
+    <!-- Left Diagonal of Y -->
+    <polygon points="6,34 32,34 68,90 42,90" fill="url(#yrLogoGrad)" />
+
+    <!-- Bottom Vertical Leg -->
+    <rect x="42" y="90" width="24" height="52" fill="url(#yrLogoGrad)" />
+
+    <!-- R Loop & Leg with Transparent Counter (evenodd) -->
+    <path
+      fill-rule="evenodd"
+      clip-rule="evenodd"
+      d="M54,82 L80,34 L110,34 C134,34 145,46 145,66 C145,82 134,92 112,94 L142,142 L116,142 L90,94 L68,94 Z
+         M78,52 L104,52 C116,52 121,57 121,66 C121,73 116,78 104,78 L72,78 Z"
+      fill="url(#yrLogoGrad)"
+    />
+  </g>
+
+  <!-- Vertical Divider Line -->
+  <rect x="168" y="24" width="4" height="118" rx="2" fill="#7c3aed" />
+
+  <!-- Typography -->
+  <g font-family="Poppins, Montserrat, Inter, system-ui, sans-serif">
+    <text x="194" y="62" fill="#ffffff" font-weight="800" font-size="33" letter-spacing="1.5">YORLEIDYS</text>
+    <text x="194" y="98" fill="#ffffff" font-weight="800" font-size="33" letter-spacing="1.5">RUIZ</text>
+    <text x="194" y="122" fill="#ffffff" font-weight="600" font-size="12.5" letter-spacing="2.5">DESARROLLADORA WEB</text>
+    <text x="194" y="139" fill="#c084fc" font-weight="600" font-size="12.5" letter-spacing="2.5">&amp; DISEÑADORA DIGITAL</text>
+  </g>
+</svg>

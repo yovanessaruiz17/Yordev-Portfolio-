@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 150" fill="none">
+  <!-- Monogram Mark -->
+  <g>
+    <!-- Star Sparkle -->
+    <path d="M36 6 Q36 21 21 21 Q36 21 36 36 Q36 21 51 21 Q36 21 36 6 Z" fill="#c084fc" />
+
+    <!-- YR Symbol -->
+    <!-- Left diagonal arm of Y -->
+    <polygon points="6,34 32,34 68,90 44,90" fill="#8b5cf6" />
+    <!-- Lower vertical stem of R/Y -->
+    <rect x="44" y="90" width="24" height="52" fill="#8b5cf6" />
+    <!-- Upper loop of R -->
+    <path d="M54,82 L80,34 L108,34 C132,34 142,48 142,66 C142,84 130,94 106,94 L68,94 Z" fill="#8b5cf6" />
+    <!-- Counter cutout of R (hollow center) -->
+    <path d="M80,52 L102,52 C116,52 120,58 120,66 C120,74 114,78 100,78 L72,78 Z" fill="#070913" />
+    <!-- Diagonal right leg of R -->
+    <polygon points="80,94 104,94 138,142 112,142" fill="#8b5cf6" />
+  </g>
+
+  <!-- Divider Line -->
+  <rect x="166" y="24" width="4" height="118" rx="2" fill="#8b5cf6" />
+
+  <!-- Typography -->
+  <text x="194" y="62" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="34" letter-spacing="2">YORLEIDYS</text>
+  <text x="194" y="98" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="34" letter-spacing="2">RUIZ</text>
+  <text x="194" y="122" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-weight="600" font-size="13" letter-spacing="3">DESARROLLADORA WEB</text>
+  <text x="194" y="139" fill="#c084fc" font-family="system-ui, -apple-system, sans-serif" font-weight="600" font-size="13" letter-spacing="3">&amp; DISEÑADORA DIGITAL</text>
+</svg>
