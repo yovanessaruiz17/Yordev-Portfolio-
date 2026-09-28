@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Calendar, Clock, ArrowRight, BookOpen } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { BlogPost } from '../types';
+import { BlogContentRenderer } from './BlogContentRenderer';
 
 interface BlogModalProps {
   isOpen: boolean;
@@ -62,27 +63,14 @@ export const BlogModal: React.FC<BlogModalProps> = ({ isOpen, onClose }) => {
               {selectedArticle.titulo}
             </h3>
 
-            <div className="space-y-4 text-slate-300 text-sm sm:text-base leading-relaxed border-t border-purple-900/30 pt-4">
-              <p className="font-medium text-purple-200">
-                {selectedArticle.extracto}
-              </p>
-
-              {selectedArticle.contenido ? (
-                selectedArticle.contenido.split('\n\n').map((paragraph, idx) => (
-                  <p key={idx} className="leading-relaxed">
-                    {paragraph}
-                  </p>
-                ))
-              ) : (
-                <>
-                  <p>
-                    En el desarrollo moderno, la experiencia del usuario final depende directamente de cómo estructuramos el código y priorizamos la carga de recursos críticos. Minimizar los scripts bloqueantes, adoptar renderizado eficiente y optimizar imágenes permite reducir drásticamente la tasa de rebote.
-                  </p>
-                  <p>
-                    Al construir aplicaciones web con frameworks modernos como React, es vital mantener un estado desacoplado y componentes puros que faciliten el mantenimiento y la escalabilidad del producto a mediano y largo plazo.
-                  </p>
-                </>
+            <div className="border-t border-purple-900/30 pt-6">
+              {selectedArticle.extracto && (
+                <p className="font-medium text-purple-200/90 text-base sm:text-lg mb-6 bg-purple-950/30 p-4 rounded-xl border border-purple-800/30">
+                  {selectedArticle.extracto}
+                </p>
               )}
+
+              <BlogContentRenderer content={selectedArticle.contenido || selectedArticle.extracto} />
             </div>
           </div>
         ) : (

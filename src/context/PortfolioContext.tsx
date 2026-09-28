@@ -28,9 +28,9 @@ import {
 } from '../utils/firestore';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
-const CACHE_PROJECTS_KEY = 'yordev_cache_projects_v2';
-const CACHE_BLOG_KEY = 'yordev_cache_blog_v2';
-const CACHE_SOCIAL_KEY = 'yordev_cache_social_links_v2';
+const CACHE_PROJECTS_KEY = 'yordev_cache_projects_v3';
+const CACHE_BLOG_KEY = 'yordev_cache_blog_v3';
+const CACHE_SOCIAL_KEY = 'yordev_cache_social_links_v3';
 
 // Configuración oficial de Firebase aprovisionada
 const officialFirebaseConfig: FirebaseConfig = {
@@ -90,7 +90,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } catch {
       //
     }
-    return projectsData;
+    return [];
   });
 
   // Estado de artículos de blog con caché de inicio rápido
@@ -142,40 +142,13 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       (loadedProjects) => {
         setIsFirestoreConnected(true);
         setLastCloudSyncTime(new Date().toLocaleTimeString());
-        if (loadedProjects && loadedProjects.length > 0) {
-          setProjects((prevLocalProjects) => {
-            const firestoreIds = new Set(loadedProjects.map((p) => Number(p.id)));
-            // Detectar si en este dispositivo existían proyectos creados localmente aún no guardados en Firestore
-            const unsaved = prevLocalProjects.filter((p) => !firestoreIds.has(Number(p.id)));
-
-            if (unsaved.length > 0) {
-              console.log(`Detectados ${unsaved.length} proyectos locales pendientes. Sincronizando con Cloud Firestore...`);
-              unsaved.forEach((p) => {
-                saveProjectToFirestore(officialFirebaseConfig, p).catch((err) =>
-                  console.error('Error auto-sincronizando proyecto con Firestore:', err)
-                );
-              });
-              const merged = [...loadedProjects, ...unsaved].sort((a, b) => b.id - a.id);
-              try {
-                localStorage.setItem(CACHE_PROJECTS_KEY, JSON.stringify(merged));
-              } catch {
-                //
-              }
-              return merged;
-            }
-
-            try {
-              localStorage.setItem(CACHE_PROJECTS_KEY, JSON.stringify(loadedProjects));
-            } catch {
-              //
-            }
-            return loadedProjects;
-          });
-        } else if (isInitialMount) {
-          // Si la base de datos está vacía por ser la primera vez, sembrar automáticamente
-          pushAllToFirestore(officialFirebaseConfig, projectsData, blogPostsData, defaultSocialLinks)
-            .then(() => console.log('Base de datos inicializada en Firestore con éxito'))
-            .catch((err) => console.warn('Error inicializando Firestore:', err));
+        if (loadedProjects) {
+          setProjects(loadedProjects);
+          try {
+            localStorage.setItem(CACHE_PROJECTS_KEY, JSON.stringify(loadedProjects));
+          } catch {
+            //
+          }
         }
       },
       (error) => {
@@ -188,33 +161,13 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       (loadedPosts) => {
         setIsFirestoreConnected(true);
         setLastCloudSyncTime(new Date().toLocaleTimeString());
-        if (loadedPosts && loadedPosts.length > 0) {
-          setBlogPosts((prevLocalPosts) => {
-            const firestoreIds = new Set(loadedPosts.map((b) => Number(b.id)));
-            const unsaved = prevLocalPosts.filter((b) => !firestoreIds.has(Number(b.id)));
-
-            if (unsaved.length > 0) {
-              unsaved.forEach((b) => {
-                saveBlogPostToFirestore(officialFirebaseConfig, b).catch((err) =>
-                  console.error('Error auto-sincronizando artículo con Firestore:', err)
-                );
-              });
-              const merged = [...loadedPosts, ...unsaved].sort((a, b) => b.id - a.id);
-              try {
-                localStorage.setItem(CACHE_BLOG_KEY, JSON.stringify(merged));
-              } catch {
-                //
-              }
-              return merged;
-            }
-
-            try {
-              localStorage.setItem(CACHE_BLOG_KEY, JSON.stringify(loadedPosts));
-            } catch {
-              //
-            }
-            return loadedPosts;
-          });
+        if (loadedPosts) {
+          setBlogPosts(loadedPosts);
+          try {
+            localStorage.setItem(CACHE_BLOG_KEY, JSON.stringify(loadedPosts));
+          } catch {
+            //
+          }
         }
       },
       (error) => {
@@ -381,14 +334,27 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Eliminar proyecto en Cloud Firestore
   const deleteProject = async (id: number) => {
-    setProjects((prev) => prev.filter((p) => p.id !== id));
-    await deleteDocumentFromFirestore(officialFirebaseConfig, PROJECTS_COLLECTION, id);
-    setLastCloudSyncTime(new Date().toLocaleTimeString());
+    setProjects((prev) => {
+      const filtered = prev.filter((p) => Number(p.id) !== Number(id));
+      try {
+        localStorage.setItem(CACHE_PROJECTS_KEY, JSON.stringify(filtered));
+      } catch {
+        //
+      }
+      return filtered;
+    });
+    const res = await deleteDocumentFromFirestore(officialFirebaseConfig, PROJECTS_COLLECTION, id);
+    if (res.success) {
+      setLastCloudSyncTime(new Date().toLocaleTimeString());
+    } else {
+      console.error('Error al eliminar proyecto de Firestore:', res.error);
+    }
+    return res;
   };
 
   // Agregar artículo de blog en Cloud Firestore
   const addBlogPost = async (newPostData: Omit<BlogPost, 'id'>) => {
-    const nextId = blogPosts.length > 0 ? Math.max(...blogPosts.map((b) => b.id)) + 1 : 1;
+    const nextId = blogPosts.length > 0 ? Math.max(...blogPosts.map((b) => Number(b.id))) + 1 : 1;
     const postWithId: BlogPost = {
       ...newPostData,
       id: nextId,
@@ -418,9 +384,22 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Eliminar artículo de blog en Cloud Firestore
   const deleteBlogPost = async (id: number) => {
-    setBlogPosts((prev) => prev.filter((b) => b.id !== id));
-    await deleteDocumentFromFirestore(officialFirebaseConfig, BLOG_COLLECTION, id);
-    setLastCloudSyncTime(new Date().toLocaleTimeString());
+    setBlogPosts((prev) => {
+      const filtered = prev.filter((b) => Number(b.id) !== Number(id));
+      try {
+        localStorage.setItem(CACHE_BLOG_KEY, JSON.stringify(filtered));
+      } catch {
+        //
+      }
+      return filtered;
+    });
+    const res = await deleteDocumentFromFirestore(officialFirebaseConfig, BLOG_COLLECTION, id);
+    if (res.success) {
+      setLastCloudSyncTime(new Date().toLocaleTimeString());
+    } else {
+      console.error('Error al eliminar artículo de Firestore:', res.error);
+    }
+    return res;
   };
 
   const saveFirebaseConfig = (config: FirebaseConfig) => {

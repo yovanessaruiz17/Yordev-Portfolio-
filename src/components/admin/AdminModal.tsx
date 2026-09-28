@@ -104,14 +104,29 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     }
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteConfirm) return;
-    if (deleteConfirm.type === 'project') {
-      deleteProject(deleteConfirm.id);
-    } else {
-      deleteBlogPost(deleteConfirm.id);
-    }
+    const { type, id } = deleteConfirm;
     setDeleteConfirm(null);
+    if (type === 'project') {
+      await deleteProject(id);
+    } else {
+      await deleteBlogPost(id);
+    }
+  };
+
+  const hasDemoProjects = projects.some((p) => Number(p.id) >= 1 && Number(p.id) <= 6);
+
+  const handleDeleteAllDemoProjects = async () => {
+    if (!confirm('¿Deseas eliminar permanentemente los proyectos de prueba iniciales (Hotel Paraíso, Agroconecta, etc.) de Cloud Firestore?')) {
+      return;
+    }
+    const demoIds = projects
+      .filter((p) => Number(p.id) >= 1 && Number(p.id) <= 6)
+      .map((p) => p.id);
+    for (const id of demoIds) {
+      await deleteProject(id);
+    }
   };
 
   const filteredProjects = projects.filter((p) => {
@@ -301,17 +316,31 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   />
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingProject(null);
-                    setProjectModalOpen(true);
-                  }}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-md shadow-purple-950/50 hover:scale-[1.02] transition-all"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Nuevo Proyecto</span>
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {hasDemoProjects && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteAllDemoProjects}
+                      className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-rose-300 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/40 transition-all hover:scale-[1.02]"
+                      title="Eliminar los proyectos de prueba iniciales de la base de datos"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Borrar Proyectos de Prueba</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingProject(null);
+                      setProjectModalOpen(true);
+                    }}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-md shadow-purple-950/50 hover:scale-[1.02] transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Nuevo Proyecto</span>
+                  </button>
+                </div>
               </div>
 
               {/* Projects Grid / List */}

@@ -220,6 +220,76 @@ export function validateSafeUrl(
 }
 
 /**
+ * Valida y sanitiza contenido enriquecido para artículos de blog
+ * Permite formato Markdown (#, ##, ###, **, *, ~~, <u>, ![imagen](url), [enlace](url), citas, listas, etc.)
+ * Bloquea scripts ejecutables, inyecciones XSS y payloads maliciosos.
+ */
+export function validateAndSanitizeBlogContent(
+  input: string,
+  options: {
+    maxLength?: number;
+    minLength?: number;
+    required?: boolean;
+  } = {}
+): ValidationResult {
+  const { maxLength = 35000, minLength = 20, required = false } = options;
+
+  if (!input || input.trim() === '') {
+    if (required) {
+      return {
+        isValid: false,
+        errorMessage: 'El contenido del artículo es obligatorio.',
+        sanitizedValue: '',
+      };
+    }
+    return { isValid: true, sanitizedValue: '' };
+  }
+
+  const trimmed = input.trim();
+
+  if (trimmed.length < minLength) {
+    return {
+      isValid: false,
+      errorMessage: `El artículo debe tener al menos ${minLength} caracteres.`,
+      sanitizedValue: trimmed,
+    };
+  }
+
+  if (trimmed.length > maxLength) {
+    return {
+      isValid: false,
+      errorMessage: `El artículo excede el límite máximo de ${maxLength} caracteres.`,
+      sanitizedValue: trimmed.slice(0, maxLength),
+    };
+  }
+
+  // Detectar y bloquear scripts ejecutables y eventos inline
+  for (const pattern of JS_CODE_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      return {
+        isValid: false,
+        errorMessage: 'Por seguridad, el contenido no puede incluir código ejecutable, scripts ni manejadores de eventos (onclick, onerror, etc.).',
+        sanitizedValue: '',
+      };
+    }
+  }
+
+  // Detectar tags script o iframe
+  if (/<(script|iframe|object|embed|applet|meta|link)\b/i.test(trimmed)) {
+    return {
+      isValid: false,
+      errorMessage: 'Por seguridad, no se permiten etiquetas <script>, <iframe> u objetos externos incrustados.',
+      sanitizedValue: '',
+    };
+  }
+
+  return {
+    isValid: true,
+    sanitizedValue: trimmed,
+  };
+}
+
+/**
  * Escapa caracteres HTML para renderizado o exportación segura
  */
 export function escapeHtml(str: string): string {

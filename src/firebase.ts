@@ -3,18 +3,19 @@ import { getAuth } from 'firebase/auth';
 import { initializeFirestore, getFirestore, doc, getDocFromServer, setLogLevel } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
-// Suprimir logs ruidosos de reintentos internos de la biblioteca Firebase
-setLogLevel('error');
+// Silenciar logs internos de reconexión/diagnóstico del cliente de Firestore
+setLogLevel('silent');
 
 // Inicializar la app de Firebase garantizando singleton
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Conectar con la base de datos de Firestore aprovisionada en Firebase ignorando propiedades undefined
+// Conectar con Firestore usando Long Polling para compatibilidad total con iframes/proxies
 let firestoreDb;
 try {
   firestoreDb = initializeFirestore(
     app,
     {
+      experimentalForceLongPolling: true,
       ignoreUndefinedProperties: true,
     },
     firebaseConfig.firestoreDatabaseId
