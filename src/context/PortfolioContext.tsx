@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Project, BlogPost, FirebaseConfig, AdminAuthState, AdminUser, SocialLinks } from '../types';
 import { projectsData, blogPostsData, defaultSocialLinks } from '../data/portfolioData';
 import {
@@ -9,26 +9,42 @@ import {
   ensureAdminInitialized,
   getTwoFactorConfig,
   saveTwoFactorConfig,
-  verify2FACode,
   TwoFactorConfig,
 } from '../utils/auth';
+import {
+  fetchProjectsFromFirestore,
+  fetchBlogPostsFromFirestore,
+  saveProjectToFirestore,
+  saveBlogPostToFirestore,
+  deleteDocumentFromFirestore,
+  pushAllToFirestore,
+} from '../utils/firestore';
 
 const LOCAL_STORAGE_PROJECTS_KEY = 'yordev_portfolio_projects';
 const LOCAL_STORAGE_BLOG_KEY = 'yordev_portfolio_blog';
 const LOCAL_STORAGE_FIREBASE_KEY = 'yordev_portfolio_firebase';
 const LOCAL_STORAGE_SOCIAL_KEY = 'yordev_portfolio_social_links';
 
+// Leer variables de entorno inyectadas por Netlify / Vite si existen
+const envApiKey = (import.meta as any).env?.VITE_FIREBASE_API_KEY || '';
+const envAuthDomain = (import.meta as any).env?.VITE_FIREBASE_AUTH_DOMAIN || '';
+const envProjectId = (import.meta as any).env?.VITE_FIREBASE_PROJECT_ID || '';
+const envStorageBucket = (import.meta as any).env?.VITE_FIREBASE_STORAGE_BUCKET || '';
+const envMessagingSenderId = (import.meta as any).env?.VITE_FIREBASE_MESSAGING_SENDER_ID || '';
+const envAppId = (import.meta as any).env?.VITE_FIREBASE_APP_ID || '';
+const envMeasurementId = (import.meta as any).env?.VITE_FIREBASE_MEASUREMENT_ID || '';
+
 const defaultFirebaseConfig: FirebaseConfig = {
-  apiKey: '',
-  authDomain: '',
-  projectId: '',
-  storageBucket: '',
-  messagingSenderId: '',
-  appId: '',
-  measurementId: '',
+  apiKey: envApiKey,
+  authDomain: envAuthDomain,
+  projectId: envProjectId,
+  storageBucket: envStorageBucket,
+  messagingSenderId: envMessagingSenderId,
+  appId: envAppId,
+  measurementId: envMeasurementId,
   projectsCollection: 'proyectos',
   blogCollection: 'articulos_blog',
-  status: 'disconnected',
+  status: envProjectId ? 'configured' : 'disconnected',
 };
 
 interface PortfolioContextType {
@@ -52,8 +68,11 @@ interface PortfolioContextType {
   deleteBlogPost: (id: number) => void;
   saveFirebaseConfig: (config: FirebaseConfig) => void;
   testFirebaseConnection: () => Promise<{ success: boolean; message: string }>;
+  syncToFirestore: () => Promise<{ success: boolean; message: string; projectCount?: number; blogCount?: number }>;
+  syncFromFirestore: () => Promise<{ success: boolean; message: string; projectCount?: number; blogCount?: number }>;
   resetToDefaults: () => void;
   isSyncing: boolean;
+  lastCloudSyncTime: string | null;
 }
 
 const PortfolioContext = createContext<PortfolioContextType | undefined>(undefined);
@@ -90,7 +109,16 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const stored = localStorage.getItem(LOCAL_STORAGE_FIREBASE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        return { ...defaultFirebaseConfig, ...parsed };
+        return {
+          ...defaultFirebaseConfig,
+          ...parsed,
+          // Preservar variables de entorno si en localStorage estuvieran vacías
+          projectId: parsed.projectId || defaultFirebaseConfig.projectId,
+          apiKey: parsed.apiKey || defaultFirebaseConfig.apiKey,
+          authDomain: parsed.authDomain || defaultFirebaseConfig.authDomain,
+          appId: parsed.appId || defaultFirebaseConfig.appId,
+          storageBucket: parsed.storageBucket || defaultFirebaseConfig.storageBucket,
+        };
       }
     } catch {
       // Usar por defecto
@@ -123,6 +151,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [lastCloudSyncTime, setLastCloudSyncTime] = useState<string | null>(null);
 
   // Inicializar credenciales maestras si aún no existen
   useEffect(() => {
@@ -133,6 +162,41 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, []);
 
+  // Sincronización automática de lectura desde Firestore en el arranque si hay un projectId configurado
+  useEffect(() => {
+    if (firebaseConfig.projectId && firebaseConfig.projectId.trim().length > 0) {
+      let isMounted = true;
+      (async () => {
+        try {
+          const [projRes, blogRes] = await Promise.all([
+            fetchProjectsFromFirestore(firebaseConfig),
+            fetchBlogPostsFromFirestore(firebaseConfig),
+          ]);
+          if (!isMounted) return;
+
+          let updatedAny = false;
+          if (projRes.success && projRes.projects && projRes.projects.length > 0) {
+            setProjects(projRes.projects);
+            updatedAny = true;
+          }
+          if (blogRes.success && blogRes.blogPosts && blogRes.blogPosts.length > 0) {
+            setBlogPosts(blogRes.blogPosts);
+            updatedAny = true;
+          }
+          if (updatedAny) {
+            setLastCloudSyncTime(new Date().toLocaleTimeString());
+          }
+        } catch (e) {
+          console.info('Información: Modo offline o Firestore aún sin documentos iniciales.', e);
+        }
+      })();
+
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [firebaseConfig.projectId]);
+
   const loginAdmin = async (
     identifier: string,
     passwordAttempt: string,
@@ -140,7 +204,6 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   ) => {
     const result = await verifyAdminCredentials(identifier, passwordAttempt, rememberMe);
     if (result.success && result.user) {
-      // Si el 2FA está activo, el LoginView solicitará el paso 2 de verificación antes de finalizar la sesión
       if (!twoFactorConfig.enabled) {
         setAdminAuth({
           isAuthenticated: true,
@@ -172,7 +235,6 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const updateSocialLinks = (newLinks: Partial<SocialLinks>) => {
     setSocialLinks((prev) => {
       const updated = { ...prev, ...newLinks };
-      // Si se actualizó el número o el mensaje, recalcula la URL completa de WhatsApp
       if (newLinks.whatsappNumber !== undefined || newLinks.whatsappMessage !== undefined) {
         const rawNum = (newLinks.whatsappNumber !== undefined ? newLinks.whatsappNumber : prev.whatsappNumber) || '';
         const msg = (newLinks.whatsappMessage !== undefined ? newLinks.whatsappMessage : prev.whatsappMessage) || '';
@@ -242,6 +304,14 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
 
     setProjects((prev) => [projectWithId, ...prev]);
+
+    // Sincronizar en segundo plano con Firestore si está configurado
+    if (firebaseConfig.projectId.trim()) {
+      saveProjectToFirestore(firebaseConfig, projectWithId).catch((err) =>
+        console.warn('Error sincronizando nuevo proyecto con Firestore:', err)
+      );
+    }
+
     return { success: true };
   };
 
@@ -249,11 +319,26 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setProjects((prev) =>
       prev.map((p) => (p.id === updatedProject.id ? updatedProject : p))
     );
+
+    // Sincronizar en segundo plano con Firestore si está configurado
+    if (firebaseConfig.projectId.trim()) {
+      saveProjectToFirestore(firebaseConfig, updatedProject).catch((err) =>
+        console.warn('Error actualizando proyecto en Firestore:', err)
+      );
+    }
+
     return { success: true };
   };
 
   const deleteProject = (id: number) => {
     setProjects((prev) => prev.filter((p) => p.id !== id));
+
+    // Eliminar en segundo plano de Firestore si está configurado
+    if (firebaseConfig.projectId.trim()) {
+      deleteDocumentFromFirestore(firebaseConfig, firebaseConfig.projectsCollection || 'proyectos', id).catch((err) =>
+        console.warn('Error eliminando proyecto en Firestore:', err)
+      );
+    }
   };
 
   const addBlogPost = (newPostData: Omit<BlogPost, 'id'>) => {
@@ -264,6 +349,14 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
 
     setBlogPosts((prev) => [postWithId, ...prev]);
+
+    // Sincronizar en segundo plano con Firestore si está configurado
+    if (firebaseConfig.projectId.trim()) {
+      saveBlogPostToFirestore(firebaseConfig, postWithId).catch((err) =>
+        console.warn('Error sincronizando nuevo post con Firestore:', err)
+      );
+    }
+
     return { success: true };
   };
 
@@ -271,11 +364,26 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setBlogPosts((prev) =>
       prev.map((b) => (b.id === updatedPost.id ? updatedPost : b))
     );
+
+    // Sincronizar en segundo plano con Firestore si está configurado
+    if (firebaseConfig.projectId.trim()) {
+      saveBlogPostToFirestore(firebaseConfig, updatedPost).catch((err) =>
+        console.warn('Error actualizando post en Firestore:', err)
+      );
+    }
+
     return { success: true };
   };
 
   const deleteBlogPost = (id: number) => {
     setBlogPosts((prev) => prev.filter((b) => b.id !== id));
+
+    // Eliminar en segundo plano de Firestore si está configurado
+    if (firebaseConfig.projectId.trim()) {
+      deleteDocumentFromFirestore(firebaseConfig, firebaseConfig.blogCollection || 'articulos_blog', id).catch((err) =>
+        console.warn('Error eliminando post en Firestore:', err)
+      );
+    }
   };
 
   const saveFirebaseConfig = (config: FirebaseConfig) => {
@@ -295,7 +403,6 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     try {
-      // Verificación contra la API REST de Firestore de Google Cloud
       const endpoint = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(
         firebaseConfig.projectId.trim()
       )}/databases/(default)/documents?pageSize=1${
@@ -320,8 +427,6 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           message: `¡Conexión exitosa con Firestore! Proyecto '${firebaseConfig.projectId}' verificado y respondiendo correctamente.`,
         };
       } else if (res.status === 403 || res.status === 401) {
-        // En Firestore, 403 a menudo indica que las reglas de seguridad restringen lectura pública sin token de usuario,
-        // pero confirma que el proyecto existe y la API de Firestore está activa.
         const updated = { ...firebaseConfig, status: 'configured' as const, lastTested: now };
         setFirebaseConfig(updated);
         setIsSyncing(false);
@@ -357,11 +462,98 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   };
 
+  /**
+   * Sube todos los proyectos y artículos locales a Cloud Firestore
+   */
+  const syncToFirestore = async (): Promise<{ success: boolean; message: string; projectCount?: number; blogCount?: number }> => {
+    setIsSyncing(true);
+    try {
+      const result = await pushAllToFirestore(firebaseConfig, projects, blogPosts);
+      setIsSyncing(false);
+      if (result.success) {
+        const now = new Date().toLocaleTimeString();
+        setLastCloudSyncTime(now);
+        const updated = { ...firebaseConfig, status: 'connected' as const, lastTested: now };
+        setFirebaseConfig(updated);
+        return {
+          success: true,
+          message: `¡Sincronización exitosa con la nube! Se subieron ${result.uploadedProjects} proyectos y ${result.uploadedBlog} artículos a Firestore.`,
+          projectCount: result.uploadedProjects,
+          blogCount: result.uploadedBlog,
+        };
+      } else {
+        return {
+          success: false,
+          message: result.error || 'Ocurrió un error al subir los datos a Firestore.',
+        };
+      }
+    } catch (err: any) {
+      setIsSyncing(false);
+      return {
+        success: false,
+        message: err.message || 'Error de conexión durante la sincronización a Firestore.',
+      };
+    }
+  };
+
+  /**
+   * Descarga los proyectos y artículos almacenados en Cloud Firestore hacia la aplicación local
+   */
+  const syncFromFirestore = async (): Promise<{ success: boolean; message: string; projectCount?: number; blogCount?: number }> => {
+    setIsSyncing(true);
+    try {
+      const [projRes, blogRes] = await Promise.all([
+        fetchProjectsFromFirestore(firebaseConfig),
+        fetchBlogPostsFromFirestore(firebaseConfig),
+      ]);
+      setIsSyncing(false);
+
+      if (!projRes.success && !blogRes.success) {
+        return {
+          success: false,
+          message: projRes.error || blogRes.error || 'No se pudieron descargar los datos de Firestore.',
+        };
+      }
+
+      let pCount = 0;
+      let bCount = 0;
+
+      if (projRes.success && projRes.projects && projRes.projects.length > 0) {
+        setProjects(projRes.projects);
+        pCount = projRes.projects.length;
+      }
+
+      if (blogRes.success && blogRes.blogPosts && blogRes.blogPosts.length > 0) {
+        setBlogPosts(blogRes.blogPosts);
+        bCount = blogRes.blogPosts.length;
+      }
+
+      const now = new Date().toLocaleTimeString();
+      setLastCloudSyncTime(now);
+      const updated = { ...firebaseConfig, status: 'connected' as const, lastTested: now };
+      setFirebaseConfig(updated);
+
+      return {
+        success: true,
+        message: `¡Datos actualizados desde Firestore! Se descargaron ${pCount} proyectos y ${bCount} artículos.`,
+        projectCount: pCount,
+        blogCount: bCount,
+      };
+    } catch (err: any) {
+      setIsSyncing(false);
+      return {
+        success: false,
+        message: err.message || 'Error de conexión al descargar de Firestore.',
+      };
+    }
+  };
+
   const resetToDefaults = () => {
     setProjects(projectsData);
     setBlogPosts(blogPostsData);
     setFirebaseConfig(defaultFirebaseConfig);
     setSocialLinks(defaultSocialLinks);
+    setLastCloudSyncTime(null);
     localStorage.removeItem(LOCAL_STORAGE_PROJECTS_KEY);
     localStorage.removeItem(LOCAL_STORAGE_BLOG_KEY);
     localStorage.removeItem(LOCAL_STORAGE_FIREBASE_KEY);
@@ -391,8 +583,11 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         deleteBlogPost,
         saveFirebaseConfig,
         testFirebaseConnection,
+        syncToFirestore,
+        syncFromFirestore,
         resetToDefaults,
         isSyncing,
+        lastCloudSyncTime,
       }}
     >
       {children}
