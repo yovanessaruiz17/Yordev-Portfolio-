@@ -1,26 +1,16 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer, setLogLevel } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
+
+// Suprimir mensajes informativos y advertencias de reconexión interna de Firestore
+setLogLevel('error');
 
 // Inicializar la app de Firebase garantizando singleton
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Conectar con la base de datos de Firestore aprovisionada en Firebase con long polling forzado para evitar fallos de WebChannel en iframes/proxies
-let firestoreDb;
-try {
-  firestoreDb = initializeFirestore(
-    app,
-    {
-      experimentalForceLongPolling: true,
-    },
-    firebaseConfig.firestoreDatabaseId
-  );
-} catch {
-  firestoreDb = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-}
-
-export const db = firestoreDb;
+// CRITICAL: Conectar con la base de datos de Firestore aprovisionada en Firebase
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 
 export enum OperationType {
@@ -74,19 +64,16 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
+// Validación inicial de conexión requerida por la directiva de Firebase
 export async function testConnection() {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error: any) {
-    if (
-      error?.message?.includes('the client is offline') ||
-      error?.code === 'unavailable' ||
-      error?.message?.includes('could not be completed')
-    ) {
-      console.warn('Firestore está conectando o el cliente opera en modo offline sincronizado.');
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.warn('Please check your Firebase configuration.');
     }
   }
 }
 
-// Ejecutar prueba de conexión al arrancar (conforme al skill de Firebase)
+// Ejecutar prueba de conexión al arrancar
 testConnection();

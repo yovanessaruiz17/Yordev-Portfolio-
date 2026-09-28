@@ -33,7 +33,7 @@ service cloud.firestore {
 
     // Colección de verificación de conectividad
     match /test/{testId} {
-      allow read: if true;
+      allow read, write: if true;
     }
 
     // Colección de Proyectos del Portafolio
