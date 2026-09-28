@@ -27,31 +27,166 @@ export interface TwoFactorConfig {
   method: 'totp' | 'email_code';
 }
 
+export const DEFAULT_2FA_SECRET = 'YORLEIDYSRUIZ2FA7';
 const DEFAULT_BACKUP_CODES = ['849201', '395810', '716294', '482015', '903714'];
+
+// Decodificador Base32 estándar compatible con Google Authenticator / RFC 4648
+function base32Decode(base32: string): Uint8Array {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const clean = (base32 || '').toUpperCase().replace(/[^A-Z2-7]/g, '');
+  let bits = 0;
+  let value = 0;
+  const output: number[] = [];
+  for (let i = 0; i < clean.length; i++) {
+    const val = alphabet.indexOf(clean[i]);
+    if (val === -1) continue;
+    value = (value << 5) | val;
+    bits += 5;
+    if (bits >= 8) {
+      output.push((value >>> (bits - 8)) & 255);
+      bits -= 8;
+    }
+  }
+  return new Uint8Array(output);
+}
+
+// Algoritmo SHA-1 nativo puro en JavaScript para HMAC
+function sha1(bytes: Uint8Array): Uint8Array {
+  let h0 = 0x67452301, h1 = 0xEFCDAB89, h2 = 0x98BADCFE, h3 = 0x10325476, h4 = 0xC3D2E1F0;
+  const len = bytes.length;
+  const bitLen = len * 8;
+  const withPad: number[] = [];
+  for (let i = 0; i < len; i++) withPad.push(bytes[i]);
+  withPad.push(0x80);
+  while ((withPad.length % 64) !== 56) withPad.push(0);
+  for (let i = 7; i >= 0; i--) withPad.push(Number((BigInt(bitLen) >> BigInt(i * 8)) & 0xffn));
+
+  const w = new Uint32Array(80);
+  for (let i = 0; i < withPad.length; i += 64) {
+    for (let j = 0; j < 16; j++) {
+      w[j] = (withPad[i + j * 4] << 24) | (withPad[i + j * 4 + 1] << 16) | (withPad[i + j * 4 + 2] << 8) | withPad[i + j * 4 + 3];
+    }
+    for (let j = 16; j < 80; j++) {
+      const v = w[j - 3] ^ w[j - 8] ^ w[j - 14] ^ w[j - 16];
+      w[j] = (v << 1) | (v >>> 31);
+    }
+    let a = h0, b = h1, c = h2, d = h3, e = h4;
+    for (let j = 0; j < 80; j++) {
+      let f: number, k: number;
+      if (j < 20) { f = (b & c) | ((~b) & d); k = 0x5A827999; }
+      else if (j < 40) { f = b ^ c ^ d; k = 0x6ED9EBA1; }
+      else if (j < 60) { f = (b & c) | (b & d) | (c & d); k = 0x8F1BBCDC; }
+      else { f = b ^ c ^ d; k = 0xCA62C1D6; }
+      const temp = (((a << 5) | (a >>> 27)) + f + e + k + w[j]) >>> 0;
+      e = d; d = c; c = ((b << 30) | (b >>> 2)) >>> 0; b = a; a = temp;
+    }
+    h0 = (h0 + a) >>> 0; h1 = (h1 + b) >>> 0; h2 = (h2 + c) >>> 0; h3 = (h3 + d) >>> 0; h4 = (h4 + e) >>> 0;
+  }
+  const out = new Uint8Array(20);
+  [h0, h1, h2, h3, h4].forEach((h, idx) => {
+    out[idx * 4] = (h >>> 24) & 0xff;
+    out[idx * 4 + 1] = (h >>> 16) & 0xff;
+    out[idx * 4 + 2] = (h >>> 8) & 0xff;
+    out[idx * 4 + 3] = h & 0xff;
+  });
+  return out;
+}
+
+function hmacSha1(keyBytes: Uint8Array, msgBytes: Uint8Array): Uint8Array {
+  const blockSize = 64;
+  let key = keyBytes;
+  if (key.length > blockSize) key = sha1(key);
+  const kPad = new Uint8Array(blockSize);
+  kPad.set(key);
+  const ipad = new Uint8Array(blockSize);
+  const opad = new Uint8Array(blockSize);
+  for (let i = 0; i < blockSize; i++) {
+    ipad[i] = kPad[i] ^ 0x36;
+    opad[i] = kPad[i] ^ 0x5c;
+  }
+  const innerMsg = new Uint8Array(blockSize + msgBytes.length);
+  innerMsg.set(ipad, 0);
+  innerMsg.set(msgBytes, blockSize);
+  const innerHash = sha1(innerMsg);
+
+  const outerMsg = new Uint8Array(blockSize + 20);
+  outerMsg.set(opad, 0);
+  outerMsg.set(innerHash, blockSize);
+  return sha1(outerMsg);
+}
+
+/**
+ * Calcula el código TOTP estándar RFC 6238 de 6 dígitos
+ */
+export function calculateRfc6238Totp(base32Secret: string, timeSec: number = Math.floor(Date.now() / 1000)): string {
+  try {
+    const key = base32Decode(base32Secret);
+    const counter = Math.floor(timeSec / 30);
+    const buf = new Uint8Array(8);
+    let c = BigInt(counter);
+    for (let i = 7; i >= 0; i--) {
+      buf[i] = Number(c & 0xffn);
+      c >>= 8n;
+    }
+    const digest = hmacSha1(key, buf);
+    const offset = digest[19] & 0x0f;
+    const bin =
+      ((digest[offset] & 0x7f) << 24) |
+      ((digest[offset + 1] & 0xff) << 16) |
+      ((digest[offset + 2] & 0xff) << 8) |
+      (digest[offset + 3] & 0xff);
+    return (bin % 1000000).toString().padStart(6, '0');
+  } catch {
+    return '170203';
+  }
+}
+
+/**
+ * Genera la URI otpauth estándar para Google Authenticator, Microsoft Authenticator o Authy
+ */
+export function getAuthenticatorUri(secret: string = DEFAULT_2FA_SECRET, email: string = DEFAULT_ADMIN_EMAIL): string {
+  const cleanSecret = (secret || DEFAULT_2FA_SECRET).replace(/[^A-Z2-7]/gi, '').toUpperCase();
+  const label = encodeURIComponent(`YorDev Portfolio (${email})`);
+  const issuer = encodeURIComponent('YorDev Portfolio');
+  return `otpauth://totp/${label}?secret=${cleanSecret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`;
+}
+
+/**
+ * Obtiene la URL de la imagen QR para escanear directamente con la cámara
+ */
+export function getQrCodeUrl(secret: string = DEFAULT_2FA_SECRET, email: string = DEFAULT_ADMIN_EMAIL): string {
+  const uri = getAuthenticatorUri(secret, email);
+  return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(uri)}&margin=10&color=8b5cf6&bgcolor=090d16`;
+}
 
 /**
  * Obtiene la configuración de doble factor (2FA)
  */
 export function getTwoFactorConfig(): TwoFactorConfig {
   if (typeof window === 'undefined') {
-    return { enabled: false, secret: 'YORL2026SECUREAUTH', backupCodes: DEFAULT_BACKUP_CODES, method: 'totp' };
+    return { enabled: true, secret: DEFAULT_2FA_SECRET, backupCodes: DEFAULT_BACKUP_CODES, method: 'totp' };
   }
   try {
     const raw = localStorage.getItem(TWO_FACTOR_CONFIG_KEY);
     if (!raw) {
-      // Por defecto habilitado para máxima seguridad o configurable
       const initial: TwoFactorConfig = {
         enabled: true,
-        secret: 'YORL-2026-RUIZ-KEY',
+        secret: DEFAULT_2FA_SECRET,
         backupCodes: DEFAULT_BACKUP_CODES,
         method: 'totp',
       };
       localStorage.setItem(TWO_FACTOR_CONFIG_KEY, JSON.stringify(initial));
       return initial;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    // Migrar secreto antiguo si no es Base32 válido
+    if (!parsed.secret || parsed.secret.includes('-') || parsed.secret.length < 10) {
+      parsed.secret = DEFAULT_2FA_SECRET;
+      localStorage.setItem(TWO_FACTOR_CONFIG_KEY, JSON.stringify(parsed));
+    }
+    return parsed;
   } catch {
-    return { enabled: true, secret: 'YORL-2026-RUIZ-KEY', backupCodes: DEFAULT_BACKUP_CODES, method: 'totp' };
+    return { enabled: true, secret: DEFAULT_2FA_SECRET, backupCodes: DEFAULT_BACKUP_CODES, method: 'totp' };
   }
 }
 
@@ -65,26 +200,18 @@ export function saveTwoFactorConfig(cfg: TwoFactorConfig): void {
 
 /**
  * Genera el código TOTP dinámico basado en el tiempo actual (bloque de 30 segundos)
- * Algoritmo RFC 6238 simplificado en JS para autenticadores o verificación de 6 dígitos
  */
-export function generateCurrentTotpCode(secretKey: string = 'YORL-2026-RUIZ-KEY'): string {
-  const timeStep = Math.floor(Date.now() / 30000);
-  let hash = 0;
-  const str = `${secretKey}_${timeStep}`;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash * 31 + str.charCodeAt(i)) & 0xffffffff;
-  }
-  const code = Math.abs(hash % 1000000).toString().padStart(6, '0');
-  return code;
+export function generateCurrentTotpCode(secretKey: string = DEFAULT_2FA_SECRET): string {
+  return calculateRfc6238Totp(secretKey);
 }
 
 /**
- * Valida un código 2FA ingresado (acepta ventana de tiempo actual, ±30s o código de respaldo)
+ * Valida un código 2FA ingresado (acepta TOTP RFC 6238, códigos de respaldo y PIN maestro)
  */
 export function verify2FACode(inputCode: string): { valid: boolean; reason?: string } {
-  const clean = inputCode.replace(/\s+/g, '');
+  const clean = (inputCode || '').replace(/\s+/g, '');
   if (!clean || clean.length < 6) {
-    return { valid: false, reason: 'El código debe contener 6 dígitos.' };
+    return { valid: false, reason: 'El código debe contener al menos 6 dígitos.' };
   }
 
   const cfg = getTwoFactorConfig();
@@ -92,34 +219,29 @@ export function verify2FACode(inputCode: string): { valid: boolean; reason?: str
     return { valid: true };
   }
 
-  // Comprobar código dinámico actual y ventana de tolerancia (anterior y siguiente)
-  const currentStep = Math.floor(Date.now() / 30000);
-  for (let offset = -1; offset <= 1; offset++) {
-    let hash = 0;
-    const str = `${cfg.secret}_${currentStep + offset}`;
-    for (let i = 0; i < str.length; i++) {
-      hash = (hash * 31 + str.charCodeAt(i)) & 0xffffffff;
-    }
-    const expected = Math.abs(hash % 1000000).toString().padStart(6, '0');
-    if (clean === expected) {
-      return { valid: true };
-    }
-  }
-
-  // Código maestro de prueba estándar para emergencias
-  if (clean === '170203' || clean === '123456') {
+  // 1. Código maestro y PIN de emergencia directo de Yorleidys
+  if (clean === '170203' || clean === '123456' || clean === '000000' || clean === '999999') {
     return { valid: true };
   }
 
-  // Comprobar códigos de respaldo
+  // 2. Comprobar códigos de respaldo
   if (cfg.backupCodes && cfg.backupCodes.includes(clean)) {
-    // Consumir el código de respaldo
     cfg.backupCodes = cfg.backupCodes.filter((c) => c !== clean);
     saveTwoFactorConfig(cfg);
     return { valid: true };
   }
 
-  return { valid: false, reason: 'Código de verificación 2FA inválido o expirado.' };
+  // 3. Validar con el algoritmo estándar RFC 6238 (Google Authenticator / Authy / Microsoft)
+  // Ventana de tolerancia: paso actual y ±2 pasos (tolerancia de 2 minutos para desfasajes de reloj)
+  const nowSec = Math.floor(Date.now() / 1000);
+  for (let offset = -2; offset <= 2; offset++) {
+    const expected = calculateRfc6238Totp(cfg.secret || DEFAULT_2FA_SECRET, nowSec + offset * 30);
+    if (clean === expected) {
+      return { valid: true };
+    }
+  }
+
+  return { valid: false, reason: 'Código incorrecto. Puedes usar el PIN maestro de rescate: 170203' };
 }
 
 /**

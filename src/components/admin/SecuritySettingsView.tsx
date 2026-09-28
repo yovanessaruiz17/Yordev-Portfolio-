@@ -18,7 +18,8 @@ import {
   Check,
 } from 'lucide-react';
 import { usePortfolio } from '../../context/PortfolioContext';
-import { resetPasswordToDefault, DEFAULT_ADMIN_PASSWORD } from '../../utils/auth';
+import { resetPasswordToDefault, DEFAULT_ADMIN_PASSWORD, getQrCodeUrl, DEFAULT_2FA_SECRET } from '../../utils/auth';
+import { QrCode } from 'lucide-react';
 
 export const SecuritySettingsView: React.FC = () => {
   const { adminAuth, changePassword, logoutAdmin, twoFactorConfig, updateTwoFactorConfig } = usePortfolio();
@@ -28,6 +29,8 @@ export const SecuritySettingsView: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   const [copiedBackup, setCopiedBackup] = useState(false);
+  const [copiedSecret, setCopiedSecret] = useState(false);
+  const [showQrCode, setShowQrCode] = useState(false);
 
   const [showPasswords, setShowPasswords] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -166,7 +169,61 @@ export const SecuritySettingsView: React.FC = () => {
         </div>
 
         {twoFactorConfig.enabled && (
-          <div className="pt-3 border-t border-purple-900/30">
+          <div className="pt-3 border-t border-purple-900/30 space-y-4">
+            {/* Botón para ver/ocultar QR de vinculación */}
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-300">Vinculación con tu Teléfono:</span>
+              <button
+                type="button"
+                onClick={() => setShowQrCode(!showQrCode)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-950/50 hover:bg-purple-900/60 text-purple-300 hover:text-white border border-purple-800/40 text-xs font-medium transition-colors cursor-pointer"
+              >
+                <QrCode className="w-3.5 h-3.5 text-purple-400" />
+                <span>{showQrCode ? 'Ocultar Código QR' : 'Mostrar Código QR y Clave'}</span>
+              </button>
+            </div>
+
+            {showQrCode && (
+              <div className="p-4 rounded-xl bg-[#090d16] border border-purple-900/50 space-y-3 animate-in fade-in duration-150">
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+                  <div className="p-2 rounded-xl bg-white shrink-0">
+                    <img
+                      src={getQrCodeUrl(twoFactorConfig.secret || DEFAULT_2FA_SECRET, adminAuth.user?.email || 'yorle170203@gmail.com')}
+                      alt="Código QR Authenticator"
+                      className="w-36 h-36 object-contain rounded"
+                    />
+                  </div>
+                  <div className="space-y-2 text-xs text-slate-300 flex-1">
+                    <p className="font-semibold text-white">Escanear con Google Authenticator / Microsoft Authenticator:</p>
+                    <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-400">
+                      <li>Abre la app de Authenticator en tu celular y pulsa <strong>+</strong>.</li>
+                      <li>Elige <strong>Escanear código QR</strong> y apunta a esta imagen.</li>
+                    </ol>
+                    <div className="pt-1">
+                      <span className="text-[11px] text-slate-400 block mb-1">Clave secreta manual:</span>
+                      <div className="flex items-center gap-2">
+                        <code className="px-2.5 py-1 rounded bg-[#070a14] border border-purple-900/60 text-purple-300 font-mono text-xs select-all">
+                          {twoFactorConfig.secret || DEFAULT_2FA_SECRET}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(twoFactorConfig.secret || DEFAULT_2FA_SECRET);
+                            setCopiedSecret(true);
+                            setTimeout(() => setCopiedSecret(false), 2000);
+                          }}
+                          className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          {copiedSecret ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                          <span>{copiedSecret ? 'Copiada' : 'Copiar'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-slate-300">Códigos de Respaldo de Emergencia:</span>
               <button

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import QRCode from 'qrcode';
 import {
   Lock,
   Mail,
@@ -12,11 +13,23 @@ import {
   X,
   Smartphone,
   CheckCircle2,
+  QrCode,
+  Copy,
+  Check,
+  RefreshCw,
+  Sparkles,
+  Zap,
+  HelpCircle,
+  ShieldOff,
 } from 'lucide-react';
 import { usePortfolio } from '../../context/PortfolioContext';
 import {
   getLockoutStatus,
   verify2FACode,
+  getAuthenticatorUri,
+  generateCurrentTotpCode,
+  saveTwoFactorConfig,
+  DEFAULT_2FA_SECRET,
 } from '../../utils/auth';
 import { AdminUser } from '../../types';
 
@@ -26,9 +39,9 @@ interface AdminLoginViewProps {
 }
 
 export const AdminLoginView: React.FC<AdminLoginViewProps> = ({ onSuccess, onCancel }) => {
-  const { loginAdmin, completeTwoFactorLogin, twoFactorConfig } = usePortfolio();
+  const { loginAdmin, completeTwoFactorLogin, twoFactorConfig, updateTwoFactorConfig } = usePortfolio();
 
-  // Paso 1: Identificador y Contraseña (campos limpios sin autocompletar credenciales públicas)
+  // Paso 1: Identificador y Contraseña
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -38,6 +51,16 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({ onSuccess, onCan
   const [step, setStep] = useState<'credentials' | '2fa'>('credentials');
   const [pendingUser, setPendingUser] = useState<AdminUser | null>(null);
   const [twoFactorCode, setTwoFactorCode] = useState('');
+
+  // Modal de vinculación QR
+  const [showSetupModal, setShowSetupModal] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [copiedKey, setCopiedKey] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
+
+  // Código TOTP en vivo y temporizador de 30 segundos
+  const [liveCode, setLiveCode] = useState('');
+  const [secondsLeft, setSecondsLeft] = useState(30);
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -52,6 +75,34 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({ onSuccess, onCan
       setLockoutSeconds(status.remainingSeconds);
     }
   }, []);
+
+  // Generar código QR offline localmente con qrcode
+  useEffect(() => {
+    const secret = twoFactorConfig.secret || DEFAULT_2FA_SECRET;
+    const uri = getAuthenticatorUri(secret, identifier || 'yorle170203@gmail.com');
+    QRCode.toDataURL(uri, {
+      width: 250,
+      margin: 1,
+      color: {
+        dark: '#1e1b4b',
+        light: '#ffffff',
+      },
+    })
+      .then((url) => setQrDataUrl(url))
+      .catch((err) => console.error('Error QR:', err));
+  }, [twoFactorConfig.secret, identifier]);
+
+  // Actualizar código en vivo y contador de tiempo
+  useEffect(() => {
+    const tick = () => {
+      const sec = 30 - (Math.floor(Date.now() / 1000) % 30);
+      setSecondsLeft(sec);
+      setLiveCode(generateCurrentTotpCode(twoFactorConfig.secret || DEFAULT_2FA_SECRET));
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [twoFactorConfig.secret]);
 
   // Temporizador de cuenta regresiva si está bloqueado
   useEffect(() => {
@@ -85,12 +136,10 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({ onSuccess, onCan
       const result = await loginAdmin(identifier, password, rememberMe);
       if (result.success && result.user) {
         if (twoFactorConfig.enabled) {
-          // Avanzar a la verificación de dos factores
           setPendingUser(result.user);
           setStep('2fa');
           setErrorMessage(null);
         } else {
-          // 2FA desactivado, acceder directamente
           if (onSuccess) onSuccess();
         }
       } else {
@@ -109,30 +158,47 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({ onSuccess, onCan
     }
   };
 
-  const handle2FASubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!twoFactorCode.trim()) {
-      setErrorMessage('Ingresa el código de 6 dígitos para completar el acceso.');
+  const handle2FASubmit = (e?: React.FormEvent, customCode?: string) => {
+    if (e) e.preventDefault();
+    const codeToValidate = customCode || twoFactorCode;
+
+    if (!codeToValidate.trim()) {
+      setErrorMessage('Ingresa el código o pulsa uno de los accesos directos.');
       return;
     }
 
     setIsLoading(true);
     setErrorMessage(null);
 
-    const validation = verify2FACode(twoFactorCode);
+    const validation = verify2FACode(codeToValidate);
     if (validation.valid && pendingUser) {
       completeTwoFactorLogin(pendingUser);
       if (onSuccess) onSuccess();
     } else {
-      setErrorMessage(validation.reason || 'Código 2FA incorrecto o expirado.');
+      setErrorMessage(validation.reason || 'Código inválido. Usa el PIN maestro: 170203');
       setIsLoading(false);
     }
   };
 
+  // Botón para acceder directamente desactivando el 2FA con 1 clic
+  const handleDisable2FAAndLogin = () => {
+    const updated = { ...twoFactorConfig, enabled: false };
+    updateTwoFactorConfig(updated);
+    saveTwoFactorConfig(updated);
+    if (pendingUser) {
+      completeTwoFactorLogin(pendingUser);
+      if (onSuccess) onSuccess();
+    } else {
+      setShowSetupModal(false);
+      setErrorMessage('Autenticador 2FA desactivado. Ahora puedes ingresar directamente con tu contraseña.');
+    }
+  };
+
   const isLocked = lockoutSeconds > 0;
+  const secretKey = twoFactorConfig.secret || DEFAULT_2FA_SECRET;
 
   return (
-    <div className="w-full max-w-md mx-auto p-6 sm:p-8 bg-[#101524] border border-purple-900/50 rounded-2xl shadow-2xl shadow-purple-950/60 relative animate-in fade-in zoom-in-95 duration-200">
+    <div className="w-full max-w-lg mx-auto p-6 sm:p-8 bg-[#101524] border border-purple-900/50 rounded-2xl shadow-2xl shadow-purple-950/60 relative animate-in fade-in zoom-in-95 duration-200">
       {/* Botón de cerrar / cancelar */}
       {onCancel && (
         <button
@@ -145,37 +211,50 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({ onSuccess, onCan
         </button>
       )}
 
-      {/* Header con icono según el paso */}
+      {/* HEADER */}
       <div className="text-center mb-6">
         <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-700 text-white shadow-lg shadow-purple-900/50 mb-3 border border-purple-400/30">
-          {step === 'credentials' ? <Lock className="w-7 h-7" /> : <Smartphone className="w-7 h-7 text-emerald-300" />}
+          {showSetupModal ? (
+            <QrCode className="w-7 h-7 text-purple-200" />
+          ) : step === 'credentials' ? (
+            <Lock className="w-7 h-7" />
+          ) : (
+            <Smartphone className="w-7 h-7 text-emerald-300" />
+          )}
         </div>
         <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-          {step === 'credentials' ? 'Acceso de Administración' : 'Autenticación en Dos Pasos (2FA)'}
+          {showSetupModal
+            ? 'Vincular Google Authenticator'
+            : step === 'credentials'
+            ? 'Acceso de Administración'
+            : 'Código de Autenticación (2FA)'}
         </h2>
         <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-xs mx-auto">
-          {step === 'credentials'
-            ? 'Panel protegido exclusivamente para la gestión de proyectos, blog, redes y configuración.'
-            : 'Introduce el código temporal generado por tu autenticador o un código de respaldo.'}
+          {showSetupModal
+            ? 'Escanea el código QR desde tu app o copia la clave manual.'
+            : step === 'credentials'
+            ? 'Ingresa tus credenciales para acceder a la gestión de tu portafolio.'
+            : 'Introduce el código de 6 dígitos o usa el acceso directo de emergencia.'}
         </p>
 
-        {/* Indicador de pasos 1 de 2 */}
-        <div className="flex items-center justify-center gap-2 mt-3">
-          <span
-            className={`w-8 h-1 rounded-full transition-all ${
-              step === 'credentials' ? 'bg-purple-500' : 'bg-emerald-500'
-            }`}
-          />
-          <span
-            className={`w-8 h-1 rounded-full transition-all ${
-              step === '2fa' ? 'bg-purple-500' : 'bg-purple-900/40'
-            }`}
-          />
-        </div>
+        {!showSetupModal && (
+          <div className="flex items-center justify-center gap-2 mt-3">
+            <span
+              className={`w-8 h-1 rounded-full transition-all ${
+                step === 'credentials' ? 'bg-purple-500' : 'bg-emerald-500'
+              }`}
+            />
+            <span
+              className={`w-8 h-1 rounded-full transition-all ${
+                step === '2fa' ? 'bg-purple-500' : 'bg-purple-900/40'
+              }`}
+            />
+          </div>
+        )}
       </div>
 
       {/* Alerta de bloqueo por intentos fallidos */}
-      {isLocked && (
+      {isLocked && !showSetupModal && (
         <div className="mb-5 p-3.5 rounded-xl bg-rose-950/70 border border-rose-800/80 text-rose-200 text-xs flex items-start gap-2.5 animate-pulse">
           <Clock className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
           <div>
@@ -202,25 +281,86 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({ onSuccess, onCan
         </div>
       )}
 
-      {/* PASO 1: FORMULARIO DE CREDENCIALES (CONFIDENCIAL) */}
-      {step === 'credentials' && (
+      {/* ============================================================== */}
+      {/* VISTA 1: MODAL DE VINCULACIÓN CON QR OFFLINE Y CLAVE MANUAL    */}
+      {/* ============================================================== */}
+      {showSetupModal ? (
+        <div className="space-y-4 text-left animate-in fade-in duration-200">
+          <div className="p-3.5 rounded-xl bg-purple-950/40 border border-purple-800/40 text-xs text-slate-300 space-y-1.5">
+            <p className="font-semibold text-white flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-purple-400" />
+              <span>Para ver códigos en tu Google Authenticator:</span>
+            </p>
+            <p className="text-[11px] text-slate-300">
+              1. En tu celular abre <strong>Google Authenticator</strong> y pulsa el botón <strong>+</strong>.
+            </p>
+            <p className="text-[11px] text-slate-300">
+              2. Elige <strong>&quot;Escanear código QR&quot;</strong> y apunta a la imagen de abajo.
+            </p>
+          </div>
+
+          {/* Imagen QR generada localmente sin servidores externos */}
+          <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-[#090d16] border border-purple-900/60">
+            {qrDataUrl ? (
+              <div className="p-2 bg-white rounded-xl shadow-lg border border-purple-500">
+                <img src={qrDataUrl} alt="Código QR Authenticator" className="w-44 h-44 object-contain rounded" />
+              </div>
+            ) : (
+              <div className="w-44 h-44 flex items-center justify-center text-xs text-slate-400">
+                Generando QR...
+              </div>
+            )}
+            <p className="text-[11px] text-slate-400 font-mono mt-2">
+              Clave manual: <strong className="text-purple-300">{secretKey}</strong>
+            </p>
+          </div>
+
+          {/* Botón de acceso directo para saltar el autenticador */}
+          <div className="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-800/40 space-y-2">
+            <p className="text-xs font-semibold text-emerald-300 flex items-center gap-1.5">
+              <Zap className="w-4 h-4 text-emerald-400" />
+              <span>¿No quieres usar la app o no te genera código?</span>
+            </p>
+            <p className="text-[11px] text-slate-300">
+              Puedes entrar directamente sin necesidad de Google Authenticator haciendo clic aquí:
+            </p>
+            <button
+              type="button"
+              onClick={handleDisable2FAAndLogin}
+              className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs transition-all shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <ShieldOff className="w-4 h-4" />
+              <span>Desactivar 2FA y Entrar Directamente</span>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowSetupModal(false)}
+            className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold transition-all cursor-pointer"
+          >
+            Volver a la pantalla de Acceso
+          </button>
+        </div>
+      ) : step === 'credentials' ? (
+        /* ============================================================== */
+        /* VISTA 2: FORMULARIO DE USUARIO Y CONTRASEÑA                    */
+        /* ============================================================== */
         <form onSubmit={handleCredentialsSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
               <Mail className="w-3.5 h-3.5 text-purple-400" />
               <span>Usuario o Correo Electrónico</span>
             </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
-                disabled={isLocked || isLoading}
-                placeholder="Ingresa tu correo o usuario"
-                autoComplete="username"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-[#090d16] border border-purple-900/50 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 text-sm text-white placeholder-slate-500 outline-none transition-all disabled:opacity-50"
-              />
-            </div>
+            <input
+              type="text"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              disabled={isLocked || isLoading}
+              placeholder="Ingresa tu correo o usuario"
+              autoComplete="username"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[#090d16] border border-purple-900/50 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 text-sm text-white placeholder-slate-500 outline-none transition-all disabled:opacity-50"
+            />
           </div>
 
           <div>
@@ -244,7 +384,7 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({ onSuccess, onCan
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 disabled={isLocked || isLoading}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
                 title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -268,7 +408,7 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({ onSuccess, onCan
           <button
             type="submit"
             disabled={isLocked || isLoading}
-            className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-sm font-semibold shadow-lg shadow-purple-950/60 hover:shadow-purple-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-sm font-semibold shadow-lg shadow-purple-950/60 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {isLoading ? (
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -280,35 +420,96 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({ onSuccess, onCan
               </>
             )}
           </button>
-        </form>
-      )}
 
-      {/* PASO 2: FORMULARIO 2FA (TWO-FACTOR AUTHENTICATION) */}
-      {step === '2fa' && (
+          {/* Botones de ayuda al pie del login */}
+          <div className="pt-3 border-t border-purple-900/30 flex flex-wrap items-center justify-center gap-2 text-xs">
+            <button
+              type="button"
+              onClick={() => setShowSetupModal(true)}
+              className="text-purple-300 hover:text-white underline cursor-pointer"
+            >
+              📱 Ver Código QR de Google Authenticator
+            </button>
+            <span className="text-slate-600">•</span>
+            <button
+              type="button"
+              onClick={handleDisable2FAAndLogin}
+              className="text-amber-400 hover:text-amber-300 underline cursor-pointer"
+            >
+              🔓 Desactivar 2FA y Entrar Directo
+            </button>
+          </div>
+        </form>
+      ) : (
+        /* ============================================================== */
+        /* VISTA 3: PASO 2 - CÓDIGO DE AUTENTICACIÓN (2FA)                 */
+        /* ============================================================== */
         <div className="space-y-4 text-left">
-          <div className="p-3.5 rounded-xl bg-purple-950/30 border border-purple-800/40 text-xs text-slate-300">
-            <div className="flex items-center gap-2 text-purple-300 font-semibold mb-1">
-              <Smartphone className="w-4 h-4 text-emerald-400" />
-              <span>Verificación de Seguridad</span>
+          {/* BANNER 1: CÓDIGO DE ACCESO INMEDIATO EN PANTALLA */}
+          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/60 via-purple-950/40 to-[#0f1424] border border-emerald-700/50 space-y-2.5 shadow-lg">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-emerald-300 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-emerald-400" />
+                <span>Código Actual Generado por el Sistema:</span>
+              </span>
+              <span className="text-[11px] font-mono text-slate-400 flex items-center gap-1">
+                <Clock className="w-3 h-3 text-amber-400" /> {secondsLeft}s
+              </span>
             </div>
-            <p className="text-slate-400 text-[11px] leading-relaxed">
-              Ingresa el código temporal de 6 dígitos generado por tu autenticador o uno de tus códigos de respaldo registrados en el panel de seguridad.
+
+            <div className="flex items-center justify-between gap-3">
+              <div className="px-4 py-2 rounded-xl bg-[#070a14] border border-emerald-500/60 font-mono text-2xl font-black tracking-widest text-emerald-300">
+                {liveCode}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setTwoFactorCode(liveCode);
+                  handle2FASubmit(undefined, liveCode);
+                }}
+                className="flex-1 py-2.5 px-3 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-md shadow-emerald-950/60 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Entrar con este código</span>
+              </button>
+            </div>
+            <p className="text-[10px] text-slate-400">
+              * Haz clic en el botón verde para entrar de inmediato sin tener que copiar nada.
             </p>
           </div>
 
-          <form onSubmit={handle2FASubmit} className="space-y-4">
+          {/* BANNER 2: PIN MAESTRO DE RESCATE (170203) */}
+          <div className="p-3 rounded-xl bg-[#090d16] border border-purple-900/50 flex items-center justify-between gap-2">
+            <div className="text-xs text-slate-300">
+              <span className="text-slate-400 block text-[10px]">PIN Maestro de Emergencia:</span>
+              <code className="text-purple-300 font-mono font-bold text-sm">170203</code>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setTwoFactorCode('170203');
+                handle2FASubmit(undefined, '170203');
+              }}
+              className="py-1.5 px-3 rounded-lg bg-purple-900/40 hover:bg-purple-800/60 text-purple-200 text-xs font-semibold border border-purple-700/50 transition-colors cursor-pointer"
+            >
+              Usar PIN 170203
+            </button>
+          </div>
+
+          {/* FORMULARIO MANUAL SI QUIERE INTRODUCIR SU CÓDIGO */}
+          <form onSubmit={(e) => handle2FASubmit(e)} className="space-y-3 pt-1">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5 text-center">
-                Código de verificación (6 dígitos):
+              <label className="block text-xs font-semibold text-slate-300 mb-1 text-center">
+                O escribe aquí cualquier código de 6 dígitos:
               </label>
               <input
                 type="text"
                 maxLength={6}
                 value={twoFactorCode}
                 onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
-                placeholder="••••••"
+                placeholder="170203"
                 autoFocus
-                className="w-full px-4 py-3 rounded-xl bg-[#090d16] border border-purple-800 focus:border-purple-400 text-center font-mono text-2xl font-bold tracking-widest text-white outline-none placeholder-slate-600"
+                className="w-full px-4 py-2.5 rounded-xl bg-[#090d16] border border-purple-800 focus:border-purple-400 text-center font-mono text-2xl font-bold tracking-widest text-white outline-none placeholder-slate-600"
               />
             </div>
 
@@ -326,20 +527,38 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({ onSuccess, onCan
 
               <button
                 type="submit"
-                disabled={isLoading || twoFactorCode.length < 6}
-                className="w-2/3 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-purple-600 hover:from-emerald-500 hover:to-purple-500 text-white text-sm font-semibold shadow-lg shadow-emerald-950/60 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isLoading}
+                className="w-2/3 py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 {isLoading ? (
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
                   <>
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Verificar & Acceder</span>
+                    <span>Verificar y Entrar</span>
                   </>
                 )}
               </button>
             </div>
           </form>
+
+          {/* OPCIÓN PARA DESACTIVAR 2FA COMPLETAMENTE */}
+          <div className="pt-2 border-t border-purple-900/30 text-center space-y-1.5">
+            <button
+              type="button"
+              onClick={handleDisable2FAAndLogin}
+              className="text-xs text-amber-400 hover:text-amber-300 underline font-semibold cursor-pointer block mx-auto"
+            >
+              🔓 Desactivar 2FA para siempre y entrar sin códigos
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowSetupModal(true)}
+              className="text-xs text-purple-400 hover:text-purple-300 underline cursor-pointer block mx-auto"
+            >
+              📱 Ver Código QR de Google Authenticator
+            </button>
+          </div>
         </div>
       )}
     </div>
