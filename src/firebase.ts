@@ -1,16 +1,29 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer, setLogLevel } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, doc, getDocFromServer, setLogLevel } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
-// Suprimir mensajes informativos y advertencias de reconexión interna de Firestore
+// Suprimir logs ruidosos de reintentos internos de la biblioteca Firebase
 setLogLevel('error');
 
 // Inicializar la app de Firebase garantizando singleton
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// CRITICAL: Conectar con la base de datos de Firestore aprovisionada en Firebase
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Conectar con la base de datos de Firestore aprovisionada en Firebase ignorando propiedades undefined
+let firestoreDb;
+try {
+  firestoreDb = initializeFirestore(
+    app,
+    {
+      ignoreUndefinedProperties: true,
+    },
+    firebaseConfig.firestoreDatabaseId
+  );
+} catch {
+  firestoreDb = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+}
+
+export const db = firestoreDb;
 export const auth = getAuth(app);
 
 export enum OperationType {

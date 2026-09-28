@@ -188,7 +188,7 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
       imagen: finalImagen,
       destacado,
       estado: estado.trim() || 'En línea',
-      cliente: cliente.trim() || undefined,
+      cliente: cliente.trim() || '',
     };
 
     onSave(projectPayload as Project);

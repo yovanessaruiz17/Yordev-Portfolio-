@@ -15,20 +15,20 @@ service cloud.firestore {
     }
 
     function isValidProject(data) {
-      return data.id is number
-        && data.titulo is string && data.titulo.size() > 0 && data.titulo.size() <= 200
-        && data.descripcion is string && data.descripcion.size() <= 1000;
+      return ('id' in data)
+        && ('titulo' in data && data.titulo is string && data.titulo.size() > 0 && data.titulo.size() <= 500)
+        && (!('descripcion' in data) || (data.descripcion is string && data.descripcion.size() <= 20000));
     }
 
     function isValidBlogPost(data) {
-      return data.id is number
-        && data.titulo is string && data.titulo.size() > 0 && data.titulo.size() <= 250
-        && data.extracto is string && data.extracto.size() <= 1000;
+      return ('id' in data)
+        && ('titulo' in data && data.titulo is string && data.titulo.size() > 0 && data.titulo.size() <= 500)
+        && (!('extracto' in data) || (data.extracto is string && data.extracto.size() <= 20000));
     }
 
     function isValidCompanyConfig(data) {
-      return (!('email' in data) || (data.email is string && data.email.size() <= 150))
-        && (!('nombre' in data) || (data.nombre is string && data.nombre.size() <= 100));
+      return (!('email' in data) || (data.email is string && data.email.size() <= 300))
+        && (!('nombre' in data) || (data.nombre is string && data.nombre.size() <= 300));
     }
 
     // Colección de verificación de conectividad

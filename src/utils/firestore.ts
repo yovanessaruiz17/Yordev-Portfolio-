@@ -18,6 +18,24 @@ export const CONFIG_COLLECTION = 'configuracion';
 export const COMPANY_DOC_ID = 'empresa';
 
 /**
+ * Sanitiza recursivamente objetos para Firestore eliminando cualquier valor undefined
+ */
+export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === undefined) {
+      continue;
+    }
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      result[key] = sanitizeForFirestore(value);
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+/**
  * Obtiene todos los proyectos directamente desde Firestore
  */
 export async function fetchProjectsFromFirestore(): Promise<{ success: boolean; projects?: Project[]; error?: string }> {
@@ -77,21 +95,27 @@ export async function fetchCompanyConfigFromFirestore(): Promise<{ success: bool
 }
 
 /**
- * Guarda o actualiza un proyecto en Firestore
+ * Guarda o actualiza un proyecto en Firestore garantizando limpieza de tipos y campos
  */
 export async function saveProjectToFirestore(_config: FirebaseConfig, project: Project): Promise<{ success: boolean; error?: string }> {
   const path = `${PROJECTS_COLLECTION}/${project.id}`;
   try {
     const docRef = doc(db, PROJECTS_COLLECTION, String(project.id));
-    const payload = {
+    const cleanProject = sanitizeForFirestore({
       ...project,
+      id: Number(project.id),
+      cliente: project.cliente ? project.cliente.trim() : '',
+      estado: project.estado ? project.estado.trim() : 'En línea',
+      url: project.url ? project.url.trim() : '#',
+      destacado: Boolean(project.destacado),
+      tecnologias: Array.isArray(project.tecnologias) ? project.tecnologias : ['Web'],
       updatedAt: new Date().toISOString(),
-    };
-    await setDoc(docRef, payload, { merge: true });
+    });
+    await setDoc(docRef, cleanProject, { merge: true });
     return { success: true };
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
-    return { success: false, error: error instanceof Error ? error.message : 'Error al guardar proyecto' };
+    return { success: false, error: error instanceof Error ? error.message : 'Error al guardar proyecto en Firestore' };
   }
 }
 
@@ -102,15 +126,18 @@ export async function saveBlogPostToFirestore(_config: FirebaseConfig, post: Blo
   const path = `${BLOG_COLLECTION}/${post.id}`;
   try {
     const docRef = doc(db, BLOG_COLLECTION, String(post.id));
-    const payload = {
+    const cleanPost = sanitizeForFirestore({
       ...post,
+      id: Number(post.id),
+      contenido: post.contenido ? post.contenido.trim() : '',
+      enlace: post.enlace ? post.enlace.trim() : '#blog',
       updatedAt: new Date().toISOString(),
-    };
-    await setDoc(docRef, payload, { merge: true });
+    });
+    await setDoc(docRef, cleanPost, { merge: true });
     return { success: true };
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
-    return { success: false, error: error instanceof Error ? error.message : 'Error al guardar artículo' };
+    return { success: false, error: error instanceof Error ? error.message : 'Error al guardar artículo en Firestore' };
   }
 }
 
@@ -121,11 +148,11 @@ export async function saveCompanyConfigToFirestore(links: SocialLinks): Promise<
   const path = `${CONFIG_COLLECTION}/${COMPANY_DOC_ID}`;
   try {
     const docRef = doc(db, CONFIG_COLLECTION, COMPANY_DOC_ID);
-    const payload = {
+    const cleanConfig = sanitizeForFirestore({
       ...links,
       updatedAt: new Date().toISOString(),
-    };
-    await setDoc(docRef, payload, { merge: true });
+    });
+    await setDoc(docRef, cleanConfig, { merge: true });
     return { success: true };
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
@@ -219,7 +246,7 @@ export function subscribeToCompanyConfig(onUpdate: (links: SocialLinks) => void,
 }
 
 /**
- * Sube todos los proyectos y artículos iniciales en lote (batch) a Cloud Firestore
+ * Sube todos los proyectos y artículos en lote a Cloud Firestore
  */
 export async function pushAllToFirestore(
   _config: FirebaseConfig,
@@ -233,17 +260,37 @@ export async function pushAllToFirestore(
 
     for (const project of projects) {
       const docRef = doc(db, PROJECTS_COLLECTION, String(project.id));
-      batch.set(docRef, { ...project, updatedAt: nowIso }, { merge: true });
+      const cleanProj = sanitizeForFirestore({
+        ...project,
+        id: Number(project.id),
+        cliente: project.cliente ? project.cliente.trim() : '',
+        estado: project.estado ? project.estado.trim() : 'En línea',
+        url: project.url ? project.url.trim() : '#',
+        destacado: Boolean(project.destacado),
+        updatedAt: nowIso,
+      });
+      batch.set(docRef, cleanProj, { merge: true });
     }
 
     for (const post of blogPosts) {
       const docRef = doc(db, BLOG_COLLECTION, String(post.id));
-      batch.set(docRef, { ...post, updatedAt: nowIso }, { merge: true });
+      const cleanPost = sanitizeForFirestore({
+        ...post,
+        id: Number(post.id),
+        contenido: post.contenido ? post.contenido.trim() : '',
+        enlace: post.enlace ? post.enlace.trim() : '#blog',
+        updatedAt: nowIso,
+      });
+      batch.set(docRef, cleanPost, { merge: true });
     }
 
     if (socialLinks) {
       const docRef = doc(db, CONFIG_COLLECTION, COMPANY_DOC_ID);
-      batch.set(docRef, { ...socialLinks, updatedAt: nowIso }, { merge: true });
+      const cleanSocial = sanitizeForFirestore({
+        ...socialLinks,
+        updatedAt: nowIso,
+      });
+      batch.set(docRef, cleanSocial, { merge: true });
     }
 
     await batch.commit();

@@ -143,12 +143,34 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setIsFirestoreConnected(true);
         setLastCloudSyncTime(new Date().toLocaleTimeString());
         if (loadedProjects && loadedProjects.length > 0) {
-          setProjects(loadedProjects);
-          try {
-            localStorage.setItem(CACHE_PROJECTS_KEY, JSON.stringify(loadedProjects));
-          } catch {
-            //
-          }
+          setProjects((prevLocalProjects) => {
+            const firestoreIds = new Set(loadedProjects.map((p) => Number(p.id)));
+            // Detectar si en este dispositivo existían proyectos creados localmente aún no guardados en Firestore
+            const unsaved = prevLocalProjects.filter((p) => !firestoreIds.has(Number(p.id)));
+
+            if (unsaved.length > 0) {
+              console.log(`Detectados ${unsaved.length} proyectos locales pendientes. Sincronizando con Cloud Firestore...`);
+              unsaved.forEach((p) => {
+                saveProjectToFirestore(officialFirebaseConfig, p).catch((err) =>
+                  console.error('Error auto-sincronizando proyecto con Firestore:', err)
+                );
+              });
+              const merged = [...loadedProjects, ...unsaved].sort((a, b) => b.id - a.id);
+              try {
+                localStorage.setItem(CACHE_PROJECTS_KEY, JSON.stringify(merged));
+              } catch {
+                //
+              }
+              return merged;
+            }
+
+            try {
+              localStorage.setItem(CACHE_PROJECTS_KEY, JSON.stringify(loadedProjects));
+            } catch {
+              //
+            }
+            return loadedProjects;
+          });
         } else if (isInitialMount) {
           // Si la base de datos está vacía por ser la primera vez, sembrar automáticamente
           pushAllToFirestore(officialFirebaseConfig, projectsData, blogPostsData, defaultSocialLinks)
@@ -167,12 +189,32 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setIsFirestoreConnected(true);
         setLastCloudSyncTime(new Date().toLocaleTimeString());
         if (loadedPosts && loadedPosts.length > 0) {
-          setBlogPosts(loadedPosts);
-          try {
-            localStorage.setItem(CACHE_BLOG_KEY, JSON.stringify(loadedPosts));
-          } catch {
-            //
-          }
+          setBlogPosts((prevLocalPosts) => {
+            const firestoreIds = new Set(loadedPosts.map((b) => Number(b.id)));
+            const unsaved = prevLocalPosts.filter((b) => !firestoreIds.has(Number(b.id)));
+
+            if (unsaved.length > 0) {
+              unsaved.forEach((b) => {
+                saveBlogPostToFirestore(officialFirebaseConfig, b).catch((err) =>
+                  console.error('Error auto-sincronizando artículo con Firestore:', err)
+                );
+              });
+              const merged = [...loadedPosts, ...unsaved].sort((a, b) => b.id - a.id);
+              try {
+                localStorage.setItem(CACHE_BLOG_KEY, JSON.stringify(merged));
+              } catch {
+                //
+              }
+              return merged;
+            }
+
+            try {
+              localStorage.setItem(CACHE_BLOG_KEY, JSON.stringify(loadedPosts));
+            } catch {
+              //
+            }
+            return loadedPosts;
+          });
         }
       },
       (error) => {
@@ -292,10 +334,13 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Agregar nuevo proyecto a Cloud Firestore
   const addProject = async (newProjectData: Omit<Project, 'id'>) => {
-    const nextId = projects.length > 0 ? Math.max(...projects.map((p) => p.id)) + 1 : 1;
+    const nextId = projects.length > 0 ? Math.max(...projects.map((p) => Number(p.id))) + 1 : 1;
     const projectWithId: Project = {
       ...newProjectData,
       id: nextId,
+      cliente: newProjectData.cliente?.trim() || '',
+      estado: newProjectData.estado?.trim() || 'En línea',
+      url: newProjectData.url?.trim() || '#',
     };
 
     // Actualización inmediata en UI
@@ -305,19 +350,31 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const result = await saveProjectToFirestore(officialFirebaseConfig, projectWithId);
     if (result.success) {
       setLastCloudSyncTime(new Date().toLocaleTimeString());
+    } else {
+      console.error('Error guardando proyecto en Firestore:', result.error);
     }
     return result;
   };
 
   // Actualizar proyecto en Cloud Firestore
   const updateProject = async (updatedProject: Project) => {
+    const sanitizedProject: Project = {
+      ...updatedProject,
+      id: Number(updatedProject.id),
+      cliente: updatedProject.cliente?.trim() || '',
+      estado: updatedProject.estado?.trim() || 'En línea',
+      url: updatedProject.url?.trim() || '#',
+    };
+
     setProjects((prev) =>
-      prev.map((p) => (p.id === updatedProject.id ? updatedProject : p))
+      prev.map((p) => (p.id === sanitizedProject.id ? sanitizedProject : p))
     );
 
-    const result = await saveProjectToFirestore(officialFirebaseConfig, updatedProject);
+    const result = await saveProjectToFirestore(officialFirebaseConfig, sanitizedProject);
     if (result.success) {
       setLastCloudSyncTime(new Date().toLocaleTimeString());
+    } else {
+      console.error('Error actualizando proyecto en Firestore:', result.error);
     }
     return result;
   };
