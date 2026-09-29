@@ -3,13 +3,18 @@ import { Mail, MapPin, Radio, Send, MessageCircle, CheckCircle, ShieldAlert } fr
 import { usePortfolio } from '../context/PortfolioContext';
 import { ReCaptcha } from './ReCaptcha';
 
-export const ContactSection: React.FC = () => {
+interface ContactSectionProps {
+  onOpenLegal?: (tab?: 'privacy' | 'terms') => void;
+}
+
+export const ContactSection: React.FC<ContactSectionProps> = ({ onOpenLegal }) => {
   const { socialLinks } = usePortfolio();
   const [formData, setFormData] = useState({
     nombre: '',
     email: '',
     mensaje: '',
   });
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
   const [isCaptchaVerified, setIsCaptchaVerified] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -19,6 +24,11 @@ export const ContactSection: React.FC = () => {
     e.preventDefault();
     if (!formData.nombre.trim() || !formData.email.trim() || !formData.mensaje.trim()) {
       setError('Por favor completa todos los campos.');
+      return;
+    }
+
+    if (!acceptedLegal) {
+      setError('Debes autorizar el tratamiento de datos personales conforme a la Ley 1581 de 2012 para enviar el mensaje.');
       return;
     }
 
@@ -35,6 +45,7 @@ export const ContactSection: React.FC = () => {
       setSubmitting(false);
       setSubmitted(true);
       setIsCaptchaVerified(false);
+      setAcceptedLegal(false);
     }, 800);
   };
 
@@ -177,6 +188,41 @@ export const ContactSection: React.FC = () => {
                       required
                       className="w-full px-4 py-3 rounded-xl bg-[#0b0e1e]/80 border border-purple-900/40 focus:border-purple-500 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-colors resize-none"
                     />
+                  </div>
+
+                  {/* Casilla obligatoria de autorización Habeas Data / Términos */}
+                  <div className="flex items-start gap-2.5 p-3 rounded-xl bg-[#080c1a]/90 border border-purple-900/30">
+                    <input
+                      type="checkbox"
+                      id="accept-legal-policies"
+                      checked={acceptedLegal}
+                      onChange={(e) => {
+                        setAcceptedLegal(e.target.checked);
+                        if (e.target.checked && error.includes('Ley 1581')) {
+                          setError('');
+                        }
+                      }}
+                      className="mt-0.5 w-4 h-4 rounded border-purple-700 text-purple-600 focus:ring-purple-500 bg-[#0e1428] cursor-pointer shrink-0"
+                      required
+                    />
+                    <label htmlFor="accept-legal-policies" className="text-xs text-slate-300 leading-relaxed cursor-pointer select-none">
+                      Autorizo el tratamiento de mis datos personales de acuerdo con la{' '}
+                      <button
+                        type="button"
+                        onClick={() => onOpenLegal?.('privacy')}
+                        className="text-purple-400 hover:text-purple-300 underline font-semibold focus:outline-none"
+                      >
+                        Política de Tratamiento de Datos (Ley 1581 de 2012)
+                      </button>{' '}
+                      y acepto los{' '}
+                      <button
+                        type="button"
+                        onClick={() => onOpenLegal?.('terms')}
+                        className="text-purple-400 hover:text-purple-300 underline font-semibold focus:outline-none"
+                      >
+                        Términos y Condiciones de Servicio
+                      </button>.
+                    </label>
                   </div>
 
                   {/* Widget reCAPTCHA Antispam */}

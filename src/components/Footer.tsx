@@ -5,47 +5,56 @@ import { usePortfolio } from '../context/PortfolioContext';
 
 interface FooterProps {
   onOpenAdmin?: () => void;
+  onOpenLegal?: (tab: 'privacy' | 'terms' | 'cookies' | 'disclaimer') => void;
 }
 
-export const Footer: React.FC<FooterProps> = ({ onOpenAdmin }) => {
+export const Footer: React.FC<FooterProps> = ({ onOpenAdmin, onOpenLegal }) => {
   const { adminAuth, socialLinks } = usePortfolio();
 
   return (
     <footer className="border-t border-purple-900/30 bg-[#080b13] py-10 relative">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        {/* Main Footer Row */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           {/* Left: Brand Identity */}
           <div className="flex items-center gap-3">
             <Logo size="sm" showText={true} />
           </div>
 
-          {/* Center: Copyright & Admin link */}
-          <div className="flex flex-col sm:flex-row items-center gap-3 text-xs text-slate-400 text-center">
-            <p>© {new Date().getFullYear()} Yorleidys Ruiz. Todos los derechos reservados.</p>
-            {onOpenAdmin && (
-              <>
-                <span className="hidden sm:inline text-purple-900">•</span>
-                <button
-                  type="button"
-                  onClick={onOpenAdmin}
-                  className="inline-flex items-center gap-1.5 text-purple-400 hover:text-purple-300 transition-colors focus:outline-none cursor-pointer"
-                  title={adminAuth.isAuthenticated ? 'Panel Activo (Superadmin)' : 'Acceso de Administración con Login'}
-                >
-                  {adminAuth.isAuthenticated ? (
-                    <>
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="text-emerald-300">Admin Activo</span>
-                    </>
-                  ) : (
-                    <>
-                      <Lock className="w-3.5 h-3.5 text-purple-400" />
-                      <span>Acceso Administrativo</span>
-                    </>
-                  )}
-                </button>
-              </>
-            )}
-          </div>
+          {/* Center: Legal Policies Quick Links */}
+          <nav aria-label="Enlaces legales y políticas" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-slate-400">
+            <button
+              type="button"
+              onClick={() => onOpenLegal?.('privacy')}
+              className="hover:text-purple-300 transition-colors focus:outline-none cursor-pointer underline-offset-4 hover:underline"
+            >
+              Protección de Datos (Ley 1581)
+            </button>
+            <span className="text-purple-900/80">•</span>
+            <button
+              type="button"
+              onClick={() => onOpenLegal?.('terms')}
+              className="hover:text-purple-300 transition-colors focus:outline-none cursor-pointer underline-offset-4 hover:underline"
+            >
+              Términos y Condiciones
+            </button>
+            <span className="text-purple-900/80">•</span>
+            <button
+              type="button"
+              onClick={() => onOpenLegal?.('cookies')}
+              className="hover:text-purple-300 transition-colors focus:outline-none cursor-pointer underline-offset-4 hover:underline"
+            >
+              Política de Cookies
+            </button>
+            <span className="text-purple-900/80">•</span>
+            <button
+              type="button"
+              onClick={() => onOpenLegal?.('disclaimer')}
+              className="hover:text-purple-300 transition-colors focus:outline-none cursor-pointer underline-offset-4 hover:underline"
+            >
+              Aviso Legal
+            </button>
+          </nav>
 
           {/* Right: Social Media Icons matching screenshot */}
           <div className="flex items-center gap-3">
@@ -101,6 +110,38 @@ export const Footer: React.FC<FooterProps> = ({ onOpenAdmin }) => {
               </svg>
             </a>
           </div>
+        </div>
+
+        {/* Sub-footer: Copyright & Legal Compliance Badge */}
+        <div className="pt-6 border-t border-purple-900/20 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400 text-center sm:text-left">
+          <div className="flex flex-col sm:flex-row items-center gap-2">
+            <p>© {new Date().getFullYear()} Yorleidys Ruiz. Todos los derechos reservados.</p>
+            <span className="hidden sm:inline text-purple-900">•</span>
+            <p className="text-[11px] text-purple-300/80">
+              Cumplimiento Ley 1581 de 2012 (Colombia) &amp; RGPD • Cifrado SSL 256-bit
+            </p>
+          </div>
+
+          {onOpenAdmin && (
+            <button
+              type="button"
+              onClick={onOpenAdmin}
+              className="inline-flex items-center gap-1.5 text-purple-400 hover:text-purple-300 transition-colors focus:outline-none cursor-pointer"
+              title={adminAuth.isAuthenticated ? 'Panel Activo (Superadmin)' : 'Acceso de Administración con Login'}
+            >
+              {adminAuth.isAuthenticated ? (
+                <>
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-emerald-300">Admin Activo</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Acceso Administrativo</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </footer>

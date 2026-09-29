@@ -12,11 +12,20 @@ import { Footer } from './components/Footer';
 import { AboutModal } from './components/AboutModal';
 import { BlogModal } from './components/BlogModal';
 import { AdminModal } from './components/admin/AdminModal';
+import { LegalModal, LegalTab } from './components/LegalModal';
+import { CookieBanner } from './components/CookieBanner';
 
 function PortfolioApp() {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [blogOpen, setBlogOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [legalModalOpen, setLegalModalOpen] = useState(false);
+  const [activeLegalTab, setActiveLegalTab] = useState<LegalTab>('privacy');
+
+  const handleOpenLegal = (tab: LegalTab = 'privacy') => {
+    setActiveLegalTab(tab);
+    setLegalModalOpen(true);
+  };
 
   return (
     <div className="min-h-screen bg-[#0b0f19] text-slate-100 flex flex-col selection:bg-purple-600 selection:text-white relative">
@@ -39,16 +48,27 @@ function PortfolioApp() {
         <TechnologiesSection />
         <WhyWorkWithMe />
         <TestimonialsSection />
-        <ContactSection />
+        <ContactSection onOpenLegal={handleOpenLegal} />
       </main>
 
       {/* Footer */}
-      <Footer onOpenAdmin={() => setAdminOpen(true)} />
+      <Footer
+        onOpenAdmin={() => setAdminOpen(true)}
+        onOpenLegal={handleOpenLegal}
+      />
 
       {/* Interactive Modals */}
       <AboutModal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} />
       <BlogModal isOpen={blogOpen} onClose={() => setBlogOpen(false)} />
       <AdminModal isOpen={adminOpen} onClose={() => setAdminOpen(false)} />
+      <LegalModal
+        isOpen={legalModalOpen}
+        initialTab={activeLegalTab}
+        onClose={() => setLegalModalOpen(false)}
+      />
+
+      {/* Cookie & Privacy Floating Banner */}
+      <CookieBanner onOpenCookiePolicy={() => handleOpenLegal('cookies')} />
     </div>
   );
 }
