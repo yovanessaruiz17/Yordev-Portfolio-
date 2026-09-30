@@ -7,6 +7,7 @@ import { ProjectsSection } from './components/ProjectsSection';
 import { TechnologiesSection } from './components/TechnologiesSection';
 import { WhyWorkWithMe } from './components/WhyWorkWithMe';
 import { TestimonialsSection } from './components/TestimonialsSection';
+import { FAQSection } from './components/FAQSection';
 import { ContactSection } from './components/ContactSection';
 import { Footer } from './components/Footer';
 import { AboutModal } from './components/AboutModal';
@@ -48,6 +49,7 @@ function PortfolioApp() {
         <TechnologiesSection />
         <WhyWorkWithMe />
         <TestimonialsSection />
+        <FAQSection />
         <ContactSection onOpenLegal={handleOpenLegal} />
       </main>
 

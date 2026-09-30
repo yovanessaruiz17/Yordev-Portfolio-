@@ -31,6 +31,12 @@ service cloud.firestore {
         && (!('nombre' in data) || (data.nombre is string && data.nombre.size() <= 300));
     }
 
+    function isValidTestimonial(data) {
+      return ('id' in data)
+        && ('nombre' in data && data.nombre is string && data.nombre.size() > 0 && data.nombre.size() <= 300)
+        && ('comentario' in data && data.comentario is string && data.comentario.size() <= 10000);
+    }
+
     // Colección de verificación de conectividad
     match /test/{testId} {
       allow read, write: if true;
@@ -48,6 +54,13 @@ service cloud.firestore {
       allow read: if true;
       allow create, update: if isValidId(postId) && isValidBlogPost(incoming());
       allow delete: if isValidId(postId);
+    }
+
+    // Colección de Reseñas y Testimonios de Google
+    match /testimonios/{testimonialId} {
+      allow read: if true;
+      allow create, update: if isValidId(testimonialId) && isValidTestimonial(incoming());
+      allow delete: if isValidId(testimonialId);
     }
 
     // Colección de Configuración de Empresa y Redes de Contacto

@@ -18,6 +18,7 @@ import {
   LogOut,
   UserCheck,
   Share2,
+  Star,
 } from 'lucide-react';
 import { Project, BlogPost } from '../../types';
 import { usePortfolio } from '../../context/PortfolioContext';
@@ -28,11 +29,12 @@ import { FirebaseStepByStepGuide } from './FirebaseStepByStepGuide';
 import { AdminLoginView } from './AdminLoginView';
 import { SecuritySettingsView } from './SecuritySettingsView';
 import { SocialSettingsView } from './SocialSettingsView';
+import { GoogleReviewsManager } from './GoogleReviewsManager';
 
 interface AdminModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: 'projects' | 'blog' | 'social' | 'firebase' | 'guide' | 'security';
+  initialTab?: 'projects' | 'blog' | 'reviews' | 'social' | 'firebase' | 'guide' | 'security';
 }
 
 export const AdminModal: React.FC<AdminModalProps> = ({
@@ -43,6 +45,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const {
     projects,
     blogPosts,
+    testimonials,
     addProject,
     updateProject,
     deleteProject,
@@ -54,7 +57,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     logoutAdmin,
   } = usePortfolio();
 
-  const [activeTab, setActiveTab] = useState<'projects' | 'blog' | 'social' | 'firebase' | 'guide' | 'security'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'projects' | 'blog' | 'reviews' | 'social' | 'firebase' | 'guide' | 'security'>(initialTab);
 
   // Estados de formularios emergentes
   const [projectModalOpen, setProjectModalOpen] = useState(false);
@@ -243,6 +246,19 @@ export const AdminModal: React.FC<AdminModalProps> = ({
           >
             <FileText className="w-4 h-4" />
             <span>Blog ({blogPosts.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('reviews')}
+            className={`flex items-center gap-2 px-4 py-3 text-xs sm:text-sm font-semibold border-b-2 transition-all whitespace-nowrap ${
+              activeTab === 'reviews'
+                ? 'border-purple-500 text-purple-300 bg-purple-950/20'
+                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-900/40'
+            }`}
+          >
+            <Star className="w-4 h-4 text-amber-400" />
+            <span>Reseñas Google ({testimonials.length})</span>
           </button>
 
           <button
@@ -569,7 +585,10 @@ export const AdminModal: React.FC<AdminModalProps> = ({
             </div>
           )}
 
-          {/* TAB 3: REDES SOCIALES & WHATSAPP */}
+          {/* TAB 3: RESEÑAS DE GOOGLE */}
+          {activeTab === 'reviews' && <GoogleReviewsManager />}
+
+          {/* TAB 4: REDES SOCIALES & WHATSAPP */}
           {activeTab === 'social' && <SocialSettingsView />}
 
           {/* TAB 4: FIREBASE CONFIGURATION */}

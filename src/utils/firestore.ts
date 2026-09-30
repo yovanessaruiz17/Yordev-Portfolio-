@@ -10,10 +10,11 @@ import {
   Unsubscribe,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { Project, BlogPost, FirebaseConfig, SocialLinks } from '../types';
+import { Project, BlogPost, FirebaseConfig, SocialLinks, Testimonial } from '../types';
 
 export const PROJECTS_COLLECTION = 'proyectos';
 export const BLOG_COLLECTION = 'articulos_blog';
+export const TESTIMONIALS_COLLECTION = 'testimonios';
 export const CONFIG_COLLECTION = 'configuracion';
 export const COMPANY_DOC_ID = 'empresa';
 
@@ -220,6 +221,101 @@ export function subscribeToBlogPosts(onUpdate: (posts: BlogPost[]) => void, onEr
     },
     (error) => {
       handleFirestoreError(error, OperationType.GET, BLOG_COLLECTION);
+      if (onError) onError(error);
+    }
+  );
+}
+
+/**
+ * Obtiene todos los testimonios/reseñas de Google desde Firestore
+ */
+export async function fetchTestimonialsFromFirestore(): Promise<{ success: boolean; testimonials?: Testimonial[]; error?: string }> {
+  try {
+    const snapshot = await getDocs(collection(db, TESTIMONIALS_COLLECTION));
+    const testimonials: Testimonial[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as Testimonial;
+      if (data && data.nombre && data.comentario) {
+        testimonials.push({
+          ...data,
+          id: data.id || docSnap.id,
+        });
+      }
+    });
+    return { success: true, testimonials };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, TESTIMONIALS_COLLECTION);
+    return { success: false, error: error instanceof Error ? error.message : 'Error al obtener testimonios' };
+  }
+}
+
+/**
+ * Guarda o actualiza un testimonio/reseña en Firestore
+ */
+export async function saveTestimonialToFirestore(testimonial: Testimonial): Promise<{ success: boolean; error?: string }> {
+  const path = `${TESTIMONIALS_COLLECTION}/${testimonial.id}`;
+  try {
+    const docRef = doc(db, TESTIMONIALS_COLLECTION, String(testimonial.id));
+    const cleanTestimonial = sanitizeForFirestore({
+      ...testimonial,
+      id: String(testimonial.id),
+      nombre: testimonial.nombre ? testimonial.nombre.trim() : '',
+      cargo: testimonial.cargo ? testimonial.cargo.trim() : 'Cliente Verificado',
+      empresa: testimonial.empresa ? testimonial.empresa.trim() : '',
+      comentario: testimonial.comentario ? testimonial.comentario.trim() : '',
+      estrellas: Number(testimonial.estrellas) || 5,
+      fecha: testimonial.fecha ? testimonial.fecha.trim() : 'Reciente',
+      origen: testimonial.origen || 'google',
+      isDemo: Boolean(testimonial.isDemo),
+      verificado: testimonial.verificado !== false,
+      googleReviewUrl: testimonial.googleReviewUrl ? testimonial.googleReviewUrl.trim() : '',
+      updatedAt: new Date().toISOString(),
+    });
+    await setDoc(docRef, cleanTestimonial, { merge: true });
+    return { success: true };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+    return { success: false, error: error instanceof Error ? error.message : 'Error al guardar testimonio en Firestore' };
+  }
+}
+
+/**
+ * Elimina un testimonio de Firestore
+ */
+export async function deleteTestimonialFromFirestore(id: number | string): Promise<{ success: boolean; error?: string }> {
+  const path = `${TESTIMONIALS_COLLECTION}/${id}`;
+  try {
+    const docRef = doc(db, TESTIMONIALS_COLLECTION, String(id));
+    await deleteDoc(docRef);
+    return { success: true };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+    return { success: false, error: error instanceof Error ? error.message : 'Error al eliminar testimonio' };
+  }
+}
+
+/**
+ * Suscripción en tiempo real a la colección de Testimonios / Reseñas de Google
+ */
+export function subscribeToTestimonials(onUpdate: (testimonials: Testimonial[]) => void, onError?: (err: any) => void): Unsubscribe {
+  const colRef = collection(db, TESTIMONIALS_COLLECTION);
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const items: Testimonial[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as Testimonial;
+        if (data && data.nombre && data.comentario) {
+          items.push({
+            ...data,
+            id: data.id || docSnap.id,
+          });
+        }
+      });
+      onUpdate(items);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.GET, TESTIMONIALS_COLLECTION);
       if (onError) onError(error);
     }
   );

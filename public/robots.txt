@@ -1,4 +1,22 @@
 User-agent: *
 Allow: /
 
+# Motores de Búsqueda y Rastreadores de Inteligencia Artificial (GEO / AIO)
+User-agent: GPTBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
 Sitemap: https://yordevctg17.netlify.app/sitemap.xml
+# Documento estructurado para modelos de lenguaje (LLMs):
+# https://yordevctg17.netlify.app/llms.txt

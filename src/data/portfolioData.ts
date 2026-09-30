@@ -272,33 +272,59 @@ export const valuePropsData: ValueProp[] = [
 export const testimonialsData: Testimonial[] = [
   {
     id: 1,
-    nombre: 'María Gómez',
-    cargo: 'Emprendedora',
-    empresa: 'Gómez Creaciones',
+    nombre: 'Carlos Ramírez',
+    cargo: 'CEO & Fundador',
+    empresa: 'Agroconecta S.A.S.',
     comentario:
-      'Yorleidys entendió perfecto lo que necesitaba y llevó mi idea a otro nivel. Profesional, creativa y muy comprometida.',
-    imagen: '/assets/img/testimonios/maria_gomez.jpg',
+      'Excelente trabajo y compromiso profesional. Desarrolló la plataforma web integral conectando a productores agrícolas con distribuidores en tiempo real. La velocidad y la experiencia de usuario superaron todas las expectativas. 100% recomendada.',
+    imagen: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
     estrellas: 5,
+    fecha: 'Hace 2 semanas',
+    origen: 'google',
+    isDemo: true,
+    verificado: true,
   },
   {
     id: 2,
-    nombre: 'Carlos Ramírez',
-    cargo: 'CEO, Agroconecta',
-    empresa: 'Agroconecta S.A.S.',
+    nombre: 'Laura Camila C.',
+    cargo: 'Fundadora & Directora Creativa',
+    empresa: 'Tienda Nativa Botánica',
     comentario:
-      'Excelente trabajo, comunicación constante y entregas siempre a tiempo. 100% recomendada.',
-    imagen: '/assets/img/testimonios/carlos_ramirez.jpg',
+      'Nuestra tienda virtual boutique quedó hermosa, moderna y ultra rápida en smartphones. Las ventas aumentaron notablemente desde el primer mes de lanzamiento. Comunicación impecable y entrega exacta en la fecha pactada.',
+    imagen: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
     estrellas: 5,
+    fecha: 'Hace 1 mes',
+    origen: 'google',
+    isDemo: true,
+    verificado: true,
   },
   {
     id: 3,
-    nombre: 'Laura C.',
-    cargo: 'Dueña, Tienda Nativa',
-    empresa: 'Tienda Nativa',
+    nombre: 'Ing. David Martínez',
+    cargo: 'Director de Operaciones',
+    empresa: 'Envíos Globales Express',
     comentario:
-      'Mi tienda online quedó hermosa y funciona perfecto. Desde que la lanzamos, las ventas han aumentado.',
-    imagen: '/assets/img/testimonios/laura_c.jpg',
+      'Puntualidad, código limpio y asesoría técnica de primer nivel. El sistema de cotización y rastreo que implementó resolvió por completo la gestión logística internacional de nuestra compañía.',
+    imagen: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
     estrellas: 5,
+    fecha: 'Hace 2 meses',
+    origen: 'google',
+    isDemo: true,
+    verificado: true,
+  },
+  {
+    id: 4,
+    nombre: 'Valentina Restrepo',
+    cargo: 'Gerente General',
+    empresa: 'Grupo Hotelero Paraíso',
+    comentario:
+      'Rediseñó el sitio web corporativo de lujo con motor de reservas y optimización para turismo internacional. Recibimos constantes felicitaciones de huéspedes extranjeros por lo fácil e intuitivo que es reservar.',
+    imagen: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80',
+    estrellas: 5,
+    fecha: 'Hace 3 meses',
+    origen: 'google',
+    isDemo: true,
+    verificado: true,
   },
 ];
 
@@ -346,6 +372,7 @@ export const defaultSocialLinks: SocialLinks = {
   whatsapp: 'https://wa.me/573000000000?text=Hola%20Yorleidys,%20me%20gustar%C3%ADa%20conversar%20sobre%20un%20proyecto%20web.',
   whatsappNumber: '+57 300 000 0000',
   whatsappMessage: 'Hola Yorleidys, me gustaría conversar sobre un proyecto web.',
+  googleReviewUrl: 'https://search.google.com/local/writereview?placeid=ChIJyordev-cartagena',
 };
 
 export const socialLinks: SocialLinks = defaultSocialLinks;

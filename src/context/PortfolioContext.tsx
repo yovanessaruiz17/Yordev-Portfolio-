@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Project, BlogPost, FirebaseConfig, AdminAuthState, AdminUser, SocialLinks } from '../types';
-import { projectsData, blogPostsData, defaultSocialLinks } from '../data/portfolioData';
+import { Project, BlogPost, FirebaseConfig, AdminAuthState, AdminUser, SocialLinks, Testimonial } from '../types';
+import { projectsData, blogPostsData, defaultSocialLinks, testimonialsData } from '../data/portfolioData';
 import {
   checkActiveSession,
   verifyAdminCredentials,
@@ -18,19 +18,24 @@ import {
   saveProjectToFirestore,
   saveBlogPostToFirestore,
   saveCompanyConfigToFirestore,
+  saveTestimonialToFirestore,
   deleteDocumentFromFirestore,
+  deleteTestimonialFromFirestore,
   subscribeToProjects,
   subscribeToBlogPosts,
   subscribeToCompanyConfig,
+  subscribeToTestimonials,
   pushAllToFirestore,
   PROJECTS_COLLECTION,
   BLOG_COLLECTION,
+  TESTIMONIALS_COLLECTION,
 } from '../utils/firestore';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
 const CACHE_PROJECTS_KEY = 'yordev_cache_projects_v3';
 const CACHE_BLOG_KEY = 'yordev_cache_blog_v3';
 const CACHE_SOCIAL_KEY = 'yordev_cache_social_links_v3';
+const CACHE_TESTIMONIALS_KEY = 'yordev_cache_testimonials_v2';
 
 // Configuración oficial de Firebase aprovisionada
 const officialFirebaseConfig: FirebaseConfig = {
@@ -50,6 +55,7 @@ const officialFirebaseConfig: FirebaseConfig = {
 interface PortfolioContextType {
   projects: Project[];
   blogPosts: BlogPost[];
+  testimonials: Testimonial[];
   firebaseConfig: FirebaseConfig;
   adminAuth: AdminAuthState;
   twoFactorConfig: TwoFactorConfig;
@@ -66,6 +72,10 @@ interface PortfolioContextType {
   addBlogPost: (post: Omit<BlogPost, 'id'>) => Promise<{ success: boolean; error?: string }>;
   updateBlogPost: (post: BlogPost) => Promise<{ success: boolean; error?: string }>;
   deleteBlogPost: (id: number) => Promise<void>;
+  addTestimonial: (testimonial: Omit<Testimonial, 'id'>) => Promise<{ success: boolean; id?: string | number; error?: string }>;
+  updateTestimonial: (testimonial: Testimonial) => Promise<{ success: boolean; error?: string }>;
+  deleteTestimonial: (id: number | string) => Promise<void>;
+  deleteAllDemoTestimonials: () => Promise<{ success: boolean; deletedCount: number }>;
   saveFirebaseConfig: (config: FirebaseConfig) => void;
   testFirebaseConnection: () => Promise<{ success: boolean; message: string }>;
   syncToFirestore: () => Promise<{ success: boolean; message: string; projectCount?: number; blogCount?: number }>;
@@ -118,6 +128,20 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       //
     }
     return defaultSocialLinks;
+  });
+
+  // Estado de testimonios y reseñas de Google con caché de inicio rápido
+  const [testimonials, setTestimonials] = useState<Testimonial[]>(() => {
+    try {
+      const cached = localStorage.getItem(CACHE_TESTIMONIALS_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      //
+    }
+    return testimonialsData;
   });
 
   const [firebaseConfig, setFirebaseConfig] = useState<FirebaseConfig>(officialFirebaseConfig);
@@ -196,12 +220,46 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
     );
 
+    // 4. Suscripción en tiempo real a la colección de TESTIMONIOS / RESEÑAS GOOGLE
+    const unsubTestimonials = subscribeToTestimonials(
+      (loadedTestimonials) => {
+        setIsFirestoreConnected(true);
+        if (loadedTestimonials && loadedTestimonials.length > 0) {
+          setTestimonials(loadedTestimonials);
+          try {
+            localStorage.setItem(CACHE_TESTIMONIALS_KEY, JSON.stringify(loadedTestimonials));
+          } catch {
+            //
+          }
+        } else if (loadedTestimonials && loadedTestimonials.length === 0) {
+          const hasExplicitlyCleared = localStorage.getItem('yordev_demo_reviews_cleared') === 'true';
+          if (!hasExplicitlyCleared) {
+            // Sembrar en Firestore las reseñas de prueba iniciales para que existan en la base de datos
+            testimonialsData.forEach(async (t) => {
+              await saveTestimonialToFirestore(t);
+            });
+          } else {
+            setTestimonials([]);
+            try {
+              localStorage.setItem(CACHE_TESTIMONIALS_KEY, JSON.stringify([]));
+            } catch {
+              //
+            }
+          }
+        }
+      },
+      (error) => {
+        console.warn('Alerta conexión Firestore testimonios:', error);
+      }
+    );
+
     isInitialMount = false;
 
     return () => {
       unsubProjects();
       unsubBlog();
       unsubCompany();
+      unsubTestimonials();
     };
   }, []);
 
@@ -402,6 +460,87 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return res;
   };
 
+  // Agregar testimonio / reseña de Google
+  const addTestimonial = async (newTestimonialData: Omit<Testimonial, 'id'>) => {
+    const newId = `rev_${Date.now()}`;
+    const newTestimonial: Testimonial = {
+      ...newTestimonialData,
+      id: newId,
+      createdAt: new Date().toISOString(),
+    };
+
+    setTestimonials((prev) => {
+      const updated = [newTestimonial, ...prev];
+      try {
+        localStorage.setItem(CACHE_TESTIMONIALS_KEY, JSON.stringify(updated));
+      } catch {
+        //
+      }
+      return updated;
+    });
+
+    const res = await saveTestimonialToFirestore(newTestimonial);
+    if (res.success) {
+      setLastCloudSyncTime(new Date().toLocaleTimeString());
+    }
+    return { success: res.success, id: newId, error: res.error };
+  };
+
+  // Actualizar testimonio / reseña
+  const updateTestimonial = async (updated: Testimonial) => {
+    setTestimonials((prev) => {
+      const next = prev.map((t) => (String(t.id) === String(updated.id) ? updated : t));
+      try {
+        localStorage.setItem(CACHE_TESTIMONIALS_KEY, JSON.stringify(next));
+      } catch {
+        //
+      }
+      return next;
+    });
+
+    const res = await saveTestimonialToFirestore(updated);
+    if (res.success) {
+      setLastCloudSyncTime(new Date().toLocaleTimeString());
+    }
+    return res;
+  };
+
+  // Eliminar un testimonio individual
+  const deleteTestimonial = async (id: number | string) => {
+    setTestimonials((prev) => {
+      const filtered = prev.filter((t) => String(t.id) !== String(id));
+      try {
+        localStorage.setItem(CACHE_TESTIMONIALS_KEY, JSON.stringify(filtered));
+      } catch {
+        //
+      }
+      return filtered;
+    });
+
+    await deleteTestimonialFromFirestore(id);
+    setLastCloudSyncTime(new Date().toLocaleTimeString());
+  };
+
+  // Eliminar todos los testimonios de prueba
+  const deleteAllDemoTestimonials = async () => {
+    const demoItems = testimonials.filter((t) => t.isDemo);
+    for (const item of demoItems) {
+      await deleteTestimonialFromFirestore(item.id);
+    }
+    setTestimonials((prev) => {
+      const remaining = prev.filter((t) => !t.isDemo);
+      try {
+        localStorage.setItem(CACHE_TESTIMONIALS_KEY, JSON.stringify(remaining));
+        localStorage.setItem('yordev_demo_reviews_cleared', 'true');
+      } catch {
+        //
+      }
+      return remaining;
+    });
+    setLastCloudSyncTime(new Date().toLocaleTimeString());
+    return { success: true, deletedCount: demoItems.length };
+  };
+
   const saveFirebaseConfig = (config: FirebaseConfig) => {
     setFirebaseConfig(config);
   };
@@ -538,6 +677,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       value={{
         projects,
         blogPosts,
+        testimonials,
         firebaseConfig,
         adminAuth,
         twoFactorConfig,
@@ -554,6 +694,10 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         addBlogPost,
         updateBlogPost,
         deleteBlogPost,
+        addTestimonial,
+        updateTestimonial,
+        deleteTestimonial,
+        deleteAllDemoTestimonials,
         saveFirebaseConfig,
         testFirebaseConnection,
         syncToFirestore,

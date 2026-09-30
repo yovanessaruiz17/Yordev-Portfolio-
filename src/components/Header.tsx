@@ -19,7 +19,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenBlog, onOpenAbout, onOpenA
     const handleScroll = () => {
       setScrolled(window.scrollY > 20);
 
-      const sections = ['inicio', 'servicios', 'proyectos', 'tecnologias', 'contacto'];
+      const sections = ['inicio', 'servicios', 'proyectos', 'tecnologias', 'faq', 'contacto'];
       const scrollPosition = window.scrollY + 120;
 
       for (const section of sections) {
@@ -46,6 +46,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenBlog, onOpenAbout, onOpenA
     { name: 'Proyectos', href: '#proyectos', id: 'proyectos' },
     { name: 'Tecnologías', href: '#tecnologias', id: 'tecnologias' },
     { name: 'Blog', href: '#blog', id: 'blog', isBlog: true },
+    { name: 'FAQ', href: '#faq', id: 'faq' },
     { name: 'Contacto', href: '#contacto', id: 'contacto' },
   ];
 

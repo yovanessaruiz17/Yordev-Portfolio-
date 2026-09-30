@@ -36,13 +36,20 @@ export interface ValueProp {
 }
 
 export interface Testimonial {
-  id: number;
+  id: number | string;
   nombre: string;
   cargo: string;
   empresa?: string;
   comentario: string;
-  imagen: string;
+  imagen?: string;
   estrellas: number;
+  fecha?: string;
+  origen?: 'google' | 'directo';
+  isDemo?: boolean;
+  verificado?: boolean;
+  googleReviewUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface BlogPost {
@@ -86,6 +93,7 @@ export interface SocialLinks {
   whatsapp: string;
   whatsappNumber?: string;
   whatsappMessage?: string;
+  googleReviewUrl?: string;
 }
 
 export interface AdminUser {
