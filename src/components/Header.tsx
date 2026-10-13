@@ -1,16 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { MessageCircle, Menu, X, SlidersHorizontal, Database, Lock, ShieldCheck } from 'lucide-react';
+import { MessageCircle, Menu, X } from 'lucide-react';
 import { Logo } from './Logo';
-import { usePortfolio } from '../context/PortfolioContext';
 
 interface HeaderProps {
   onOpenBlog?: () => void;
   onOpenAbout?: () => void;
-  onOpenAdmin?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenBlog, onOpenAbout, onOpenAdmin }) => {
-  const { adminAuth } = usePortfolio();
+export const Header: React.FC<HeaderProps> = ({ onOpenBlog, onOpenAbout }) => {
   const [activeSection, setActiveSection] = useState('inicio');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -116,33 +113,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenBlog, onOpenAbout, onOpenA
           })}
         </nav>
 
-        {/* CTA Button & Admin Panel Button */}
+        {/* CTA Button */}
         <div className="hidden md:flex items-center gap-3">
-          {onOpenAdmin && (
-            <button
-              type="button"
-              onClick={onOpenAdmin}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-all hover:scale-[1.02] shadow-sm ${
-                adminAuth.isAuthenticated
-                  ? 'text-emerald-300 bg-emerald-950/40 border border-emerald-800/60 hover:bg-emerald-900/40'
-                  : 'text-purple-200 bg-[#12182b] hover:bg-purple-950/60 border border-purple-800/40 hover:border-purple-600'
-              }`}
-              title={adminAuth.isAuthenticated ? 'Panel de Administración Activo' : 'Acceso de Administración (Requiere Login)'}
-            >
-              {adminAuth.isAuthenticated ? (
-                <>
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Admin Activo</span>
-                </>
-              ) : (
-                <>
-                  <Lock className="w-3.5 h-3.5 text-purple-400" />
-                  <span>Acceso Admin</span>
-                </>
-              )}
-            </button>
-          )}
-
           <a
             href="#contacto"
             className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs lg:text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-md shadow-purple-900/40 hover:shadow-purple-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
@@ -154,25 +126,6 @@ export const Header: React.FC<HeaderProps> = ({ onOpenBlog, onOpenAbout, onOpenA
 
         {/* Mobile menu hamburger toggle */}
         <div className="md:hidden flex items-center gap-2">
-          {onOpenAdmin && (
-            <button
-              type="button"
-              onClick={onOpenAdmin}
-              className={`p-1.5 rounded-lg border text-purple-300 ${
-                adminAuth.isAuthenticated
-                  ? 'bg-emerald-950/50 border-emerald-800/60 text-emerald-300'
-                  : 'bg-[#12182b] border-purple-900/40 text-purple-300'
-              }`}
-              aria-label="Panel de Administración"
-            >
-              {adminAuth.isAuthenticated ? (
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              ) : (
-                <Lock className="w-4 h-4 text-purple-400" />
-              )}
-            </button>
-          )}
-
           <a
             href="#contacto"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-purple-600 shadow-sm"
@@ -210,41 +163,6 @@ export const Header: React.FC<HeaderProps> = ({ onOpenBlog, onOpenAbout, onOpenA
                 {link.name}
               </a>
             ))}
-
-            {onOpenAdmin && (
-              <button
-                type="button"
-                onClick={() => {
-                  onOpenAdmin();
-                  setMobileMenuOpen(false);
-                }}
-                className={`mt-2 flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-semibold transition-all text-left ${
-                  adminAuth.isAuthenticated
-                    ? 'bg-emerald-950/60 text-emerald-200 border border-emerald-800/60 hover:bg-emerald-900/70'
-                    : 'bg-purple-950/60 text-purple-200 border border-purple-800/50 hover:bg-purple-900/70'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  {adminAuth.isAuthenticated ? (
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  ) : (
-                    <Lock className="w-4 h-4 text-purple-400" />
-                  )}
-                  <span>
-                    {adminAuth.isAuthenticated ? 'Panel Activo (Yorleidys)' : 'Panel de Gestión (Login)'}
-                  </span>
-                </div>
-                <span
-                  className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
-                    adminAuth.isAuthenticated
-                      ? 'text-emerald-300 bg-emerald-900/60'
-                      : 'text-purple-300 bg-purple-900/60'
-                  }`}
-                >
-                  {adminAuth.isAuthenticated ? 'Activo' : 'Privado'}
-                </span>
-              </button>
-            )}
           </div>
 
           <div className="pt-2 border-t border-purple-900/30 flex justify-between items-center text-xs text-slate-400">

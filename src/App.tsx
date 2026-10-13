@@ -38,7 +38,6 @@ function PortfolioApp() {
       <Header
         onOpenAbout={() => setAboutOpen(true)}
         onOpenBlog={() => setBlogOpen(true)}
-        onOpenAdmin={() => setAdminOpen(true)}
       />
 
       {/* Main Content Area */}
