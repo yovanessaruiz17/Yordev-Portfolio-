@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PortfolioProvider } from './context/PortfolioContext';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
@@ -15,6 +15,7 @@ import { BlogModal } from './components/BlogModal';
 import { AdminModal } from './components/admin/AdminModal';
 import { LegalModal, LegalTab } from './components/LegalModal';
 import { CookieBanner } from './components/CookieBanner';
+import { scrollToSection, cleanUrlHash } from './utils/navigation';
 
 function PortfolioApp() {
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -27,6 +28,48 @@ function PortfolioApp() {
     setActiveLegalTab(tab);
     setLegalModalOpen(true);
   };
+
+  // Interceptor global para evitar que aparezca #id en la barra de URL
+  useEffect(() => {
+    // Si la página se carga con un hash en la URL (ej: /#tecnologias), lo limpiamos al instante
+    if (window.location.hash) {
+      const targetId = window.location.hash.replace('#', '');
+      cleanUrlHash();
+      if (targetId) {
+        setTimeout(() => {
+          scrollToSection(targetId);
+        }, 150);
+      }
+    }
+
+    // Interceptar cualquier clic en enlaces con href="#..." en toda la página
+    const handleGlobalAnchorClick = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement).closest('a');
+      if (!target) return;
+
+      const href = target.getAttribute('href');
+      if (href && href.startsWith('#')) {
+        e.preventDefault();
+        const sectionId = href.slice(1);
+        scrollToSection(sectionId);
+      }
+    };
+
+    // Prevenir cambios de hash por eventos del navegador
+    const handleHashChange = () => {
+      cleanUrlHash();
+    };
+
+    document.addEventListener('click', handleGlobalAnchorClick, true);
+    window.addEventListener('hashchange', handleHashChange);
+    window.addEventListener('popstate', handleHashChange);
+
+    return () => {
+      document.removeEventListener('click', handleGlobalAnchorClick, true);
+      window.removeEventListener('hashchange', handleHashChange);
+      window.removeEventListener('popstate', handleHashChange);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#0b0f19] text-slate-100 flex flex-col selection:bg-purple-600 selection:text-white relative">

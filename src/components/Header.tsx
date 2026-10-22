@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MessageCircle, Menu, X } from 'lucide-react';
 import { Logo } from './Logo';
+import { scrollToSection } from '../utils/navigation';
 
 interface HeaderProps {
   onOpenBlog?: () => void;
@@ -51,20 +52,34 @@ export const Header: React.FC<HeaderProps> = ({ onOpenBlog, onOpenAbout }) => {
     e: React.MouseEvent<HTMLAnchorElement>,
     item: { name: string; href: string; id: string; isModal?: boolean; isBlog?: boolean }
   ) => {
+    e.preventDefault();
     if (item.isModal && onOpenAbout) {
-      e.preventDefault();
       onOpenAbout();
       setMobileMenuOpen(false);
       return;
     }
     if (item.isBlog && onOpenBlog) {
-      e.preventDefault();
       onOpenBlog();
       setMobileMenuOpen(false);
       return;
     }
     setActiveSection(item.id);
     setMobileMenuOpen(false);
+    scrollToSection(item.id);
+  };
+
+  const handleContactClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setActiveSection('contacto');
+    setMobileMenuOpen(false);
+    scrollToSection('contacto');
+  };
+
+  const handleLogoClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setActiveSection('inicio');
+    setMobileMenuOpen(false);
+    scrollToSection('inicio');
   };
 
   return (
@@ -80,6 +95,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenBlog, onOpenAbout }) => {
         {/* Brand Logo */}
         <a
           href="#inicio"
+          onClick={handleLogoClick}
           className="group focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 rounded-lg"
           aria-label="Ir al inicio - Yorleidys Ruiz"
         >
@@ -117,6 +133,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenBlog, onOpenAbout }) => {
         <div className="hidden md:flex items-center gap-3">
           <a
             href="#contacto"
+            onClick={handleContactClick}
             className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs lg:text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-md shadow-purple-900/40 hover:shadow-purple-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
           >
             <span>Hablemos</span>
@@ -128,6 +145,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenBlog, onOpenAbout }) => {
         <div className="md:hidden flex items-center gap-2">
           <a
             href="#contacto"
+            onClick={handleContactClick}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-purple-600 shadow-sm"
           >
             <span>Hablemos</span>
