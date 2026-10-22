@@ -66,6 +66,22 @@
         "updatedAt": { "type": "string", "description": "Last update ISO timestamp", "maxLength": 100 }
       },
       "required": ["email"]
+    },
+    "ContactMessage": {
+      "title": "ContactMessage",
+      "description": "Messages submitted by website visitors through the contact form",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique message identifier" },
+        "nombre": { "type": "string", "description": "Sender name", "maxLength": 200 },
+        "email": { "type": "string", "description": "Sender email", "maxLength": 200 },
+        "mensaje": { "type": "string", "description": "Message content", "maxLength": 10000 },
+        "fecha": { "type": "string", "description": "Human readable submission date", "maxLength": 100 },
+        "createdAt": { "type": "string", "description": "ISO timestamp of submission", "maxLength": 100 },
+        "leido": { "type": "boolean", "description": "Whether message has been marked as read by admin" },
+        "origen": { "type": "string", "description": "Source origin of the lead", "maxLength": 100 }
+      },
+      "required": ["nombre", "email", "mensaje"]
     }
   },
   "firestore": {
@@ -80,6 +96,10 @@
     "/articulos_blog/{postId}": {
       "schema": { "$ref": "#/entities/BlogPost" },
       "description": "Technical blog articles readable by everyone and managed by admin"
+    },
+    "/mensajes_contacto/{messageId}": {
+      "schema": { "$ref": "#/entities/ContactMessage" },
+      "description": "Inbound contact messages from clients and leads"
     },
     "/configuracion/{configId}": {
       "schema": { "$ref": "#/entities/CompanyInfo" },

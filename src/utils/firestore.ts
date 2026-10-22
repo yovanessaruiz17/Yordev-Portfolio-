@@ -10,11 +10,12 @@ import {
   Unsubscribe,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { Project, BlogPost, FirebaseConfig, SocialLinks, Testimonial } from '../types';
+import { Project, BlogPost, FirebaseConfig, SocialLinks, Testimonial, ContactMessage } from '../types';
 
 export const PROJECTS_COLLECTION = 'proyectos';
 export const BLOG_COLLECTION = 'articulos_blog';
 export const TESTIMONIALS_COLLECTION = 'testimonios';
+export const MESSAGES_COLLECTION = 'mensajes_contacto';
 export const CONFIG_COLLECTION = 'configuracion';
 export const COMPANY_DOC_ID = 'empresa';
 
@@ -401,3 +402,120 @@ export async function pushAllToFirestore(
     return { success: false, error: error instanceof Error ? error.message : 'Error al sincronizar en lote con Firestore' };
   }
 }
+
+/**
+ * Guarda un mensaje enviado desde el formulario de contacto directamente en Firestore
+ */
+export async function saveContactMessageToFirestore(message: Omit<ContactMessage, 'id'>): Promise<{ success: boolean; id?: string; error?: string }> {
+  try {
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const nowIso = new Date().toISOString();
+    const docRef = doc(db, MESSAGES_COLLECTION, messageId);
+
+    const cleanData = sanitizeForFirestore({
+      ...message,
+      id: messageId,
+      nombre: message.nombre.trim(),
+      email: message.email.trim(),
+      mensaje: message.mensaje.trim(),
+      fecha: message.fecha || new Date().toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }),
+      createdAt: nowIso,
+      leido: false,
+      origen: message.origen || 'Formulario Web YorDev',
+    });
+
+    await setDoc(docRef, cleanData);
+    return { success: true, id: messageId };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, MESSAGES_COLLECTION);
+    return { success: false, error: error instanceof Error ? error.message : 'Error al guardar mensaje en la base de datos' };
+  }
+}
+
+/**
+ * Obtiene todos los mensajes de contacto desde Firestore ordenados del más reciente al más antiguo
+ */
+export async function fetchContactMessagesFromFirestore(): Promise<{ success: boolean; messages?: ContactMessage[]; error?: string }> {
+  try {
+    const snapshot = await getDocs(collection(db, MESSAGES_COLLECTION));
+    const messages: ContactMessage[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as ContactMessage;
+      if (data && data.nombre && data.mensaje) {
+        messages.push({
+          ...data,
+          id: data.id || docSnap.id,
+        });
+      }
+    });
+    messages.sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    });
+    return { success: true, messages };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, MESSAGES_COLLECTION);
+    return { success: false, error: error instanceof Error ? error.message : 'Error al obtener mensajes' };
+  }
+}
+
+/**
+ * Suscripción en tiempo real a la colección de mensajes de contacto
+ */
+export function subscribeToContactMessages(onUpdate: (messages: ContactMessage[]) => void): Unsubscribe {
+  const colRef = collection(db, MESSAGES_COLLECTION);
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const messages: ContactMessage[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as ContactMessage;
+        if (data && data.nombre && data.mensaje) {
+          messages.push({
+            ...data,
+            id: data.id || docSnap.id,
+          });
+        }
+      });
+      messages.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      });
+      onUpdate(messages);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, MESSAGES_COLLECTION);
+    }
+  );
+}
+
+/**
+ * Marca un mensaje como leído o no leído
+ */
+export async function updateContactMessageStatus(id: string, leido: boolean): Promise<{ success: boolean; error?: string }> {
+  try {
+    const docRef = doc(db, MESSAGES_COLLECTION, id);
+    await setDoc(docRef, { leido, updatedAt: new Date().toISOString() }, { merge: true });
+    return { success: true };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, MESSAGES_COLLECTION);
+    return { success: false, error: error instanceof Error ? error.message : 'Error al actualizar estado del mensaje' };
+  }
+}
+
+/**
+ * Elimina un mensaje de la base de datos Firestore
+ */
+export async function deleteContactMessageFromFirestore(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const docRef = doc(db, MESSAGES_COLLECTION, id);
+    await deleteDoc(docRef);
+    return { success: true };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, MESSAGES_COLLECTION);
+    return { success: false, error: error instanceof Error ? error.message : 'Error al eliminar mensaje' };
+  }
+}
+

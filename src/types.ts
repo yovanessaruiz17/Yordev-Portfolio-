@@ -107,3 +107,16 @@ export interface AdminAuthState {
   isAuthenticated: boolean;
   user: AdminUser | null;
 }
+
+export interface ContactMessage {
+  id: string;
+  nombre: string;
+  email: string;
+  mensaje: string;
+  fecha: string;
+  createdAt?: string;
+  leido: boolean;
+  telefono?: string;
+  origen?: string;
+}
+

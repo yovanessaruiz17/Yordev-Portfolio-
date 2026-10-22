@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Project, BlogPost, FirebaseConfig, AdminAuthState, AdminUser, SocialLinks, Testimonial } from '../types';
+import { Project, BlogPost, FirebaseConfig, AdminAuthState, AdminUser, SocialLinks, Testimonial, ContactMessage } from '../types';
 import { projectsData, blogPostsData, defaultSocialLinks, testimonialsData } from '../data/portfolioData';
 import {
   checkActiveSession,
@@ -21,6 +21,10 @@ import {
   saveTestimonialToFirestore,
   deleteDocumentFromFirestore,
   deleteTestimonialFromFirestore,
+  saveContactMessageToFirestore,
+  subscribeToContactMessages,
+  updateContactMessageStatus,
+  deleteContactMessageFromFirestore,
   subscribeToProjects,
   subscribeToBlogPosts,
   subscribeToCompanyConfig,
@@ -56,6 +60,8 @@ interface PortfolioContextType {
   projects: Project[];
   blogPosts: BlogPost[];
   testimonials: Testimonial[];
+  messages: ContactMessage[];
+  unreadMessagesCount: number;
   firebaseConfig: FirebaseConfig;
   adminAuth: AdminAuthState;
   twoFactorConfig: TwoFactorConfig;
@@ -76,6 +82,8 @@ interface PortfolioContextType {
   updateTestimonial: (testimonial: Testimonial) => Promise<{ success: boolean; error?: string }>;
   deleteTestimonial: (id: number | string) => Promise<void>;
   deleteAllDemoTestimonials: () => Promise<{ success: boolean; deletedCount: number }>;
+  markMessageAsRead: (id: string, leido: boolean) => Promise<{ success: boolean; error?: string }>;
+  deleteContactMessage: (id: string) => Promise<{ success: boolean; error?: string }>;
   saveFirebaseConfig: (config: FirebaseConfig) => void;
   testFirebaseConnection: () => Promise<{ success: boolean; message: string }>;
   syncToFirestore: () => Promise<{ success: boolean; message: string; projectCount?: number; blogCount?: number }>;
@@ -143,6 +151,9 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
     return testimonialsData;
   });
+
+  // Estado de mensajes recibidos de clientes y leads desde el formulario
+  const [messages, setMessages] = useState<ContactMessage[]>([]);
 
   const [firebaseConfig, setFirebaseConfig] = useState<FirebaseConfig>(officialFirebaseConfig);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
@@ -253,6 +264,11 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
     );
 
+    // Suscripción en tiempo real a los mensajes de contacto
+    const unsubMessages = subscribeToContactMessages((incomingMessages) => {
+      setMessages(incomingMessages);
+    });
+
     isInitialMount = false;
 
     return () => {
@@ -260,6 +276,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       unsubBlog();
       unsubCompany();
       unsubTestimonials();
+      unsubMessages();
     };
   }, []);
 
@@ -541,6 +558,20 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return { success: true, deletedCount: demoItems.length };
   };
 
+  // Marcar mensaje como leído o no leído
+  const markMessageAsRead = async (id: string, leido: boolean) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, leido } : m))
+    );
+    return await updateContactMessageStatus(id, leido);
+  };
+
+  // Eliminar mensaje de la base de datos
+  const deleteContactMessage = async (id: string) => {
+    setMessages((prev) => prev.filter((m) => m.id !== id));
+    return await deleteContactMessageFromFirestore(id);
+  };
+
   const saveFirebaseConfig = (config: FirebaseConfig) => {
     setFirebaseConfig(config);
   };
@@ -678,6 +709,8 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         projects,
         blogPosts,
         testimonials,
+        messages,
+        unreadMessagesCount: messages.filter((m) => !m.leido).length,
         firebaseConfig,
         adminAuth,
         twoFactorConfig,
@@ -698,6 +731,8 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         updateTestimonial,
         deleteTestimonial,
         deleteAllDemoTestimonials,
+        markMessageAsRead,
+        deleteContactMessage,
         saveFirebaseConfig,
         testFirebaseConnection,
         syncToFirestore,

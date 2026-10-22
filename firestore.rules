@@ -37,6 +37,12 @@ service cloud.firestore {
         && ('comentario' in data && data.comentario is string && data.comentario.size() <= 10000);
     }
 
+    function isValidContactMessage(data) {
+      return ('nombre' in data && data.nombre is string && data.nombre.size() > 0 && data.nombre.size() <= 300)
+        && ('email' in data && data.email is string && data.email.size() > 0 && data.email.size() <= 300)
+        && ('mensaje' in data && data.mensaje is string && data.mensaje.size() > 0 && data.mensaje.size() <= 20000);
+    }
+
     // Colección de verificación de conectividad
     match /test/{testId} {
       allow read, write: if true;
@@ -61,6 +67,12 @@ service cloud.firestore {
       allow read: if true;
       allow create, update: if isValidId(testimonialId) && isValidTestimonial(incoming());
       allow delete: if isValidId(testimonialId);
+    }
+
+    // Colección de Mensajes de Contacto recibidos desde la web
+    match /mensajes_contacto/{messageId} {
+      allow create: if isValidId(messageId) && isValidContactMessage(incoming());
+      allow read, update, delete: if true;
     }
 
     // Colección de Configuración de Empresa y Redes de Contacto

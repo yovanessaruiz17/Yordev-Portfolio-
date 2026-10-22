@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Mail, MapPin, Radio, Send, MessageCircle, CheckCircle, ShieldAlert } from 'lucide-react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { ReCaptcha } from './ReCaptcha';
+import { saveContactMessageToFirestore } from '../utils/firestore';
 
 interface ContactSectionProps {
   onOpenLegal?: (tab?: 'privacy' | 'terms') => void;
@@ -14,13 +15,14 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ onOpenLegal }) =
     email: '',
     mensaje: '',
   });
+  const [lastSentData, setLastSentData] = useState<{ nombre: string; email: string; mensaje: string } | null>(null);
   const [acceptedLegal, setAcceptedLegal] = useState(false);
   const [isCaptchaVerified, setIsCaptchaVerified] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.nombre.trim() || !formData.email.trim() || !formData.mensaje.trim()) {
       setError('Por favor completa todos los campos.');
@@ -40,13 +42,31 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ onOpenLegal }) =
     setError('');
     setSubmitting(true);
 
-    // Simulate sending message
-    setTimeout(() => {
-      setSubmitting(false);
+    const messagePayload = {
+      nombre: formData.nombre.trim(),
+      email: formData.email.trim(),
+      mensaje: formData.mensaje.trim(),
+      fecha: new Date().toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }),
+      leido: false,
+      origen: 'Formulario Web YorDev',
+    };
+
+    const res = await saveContactMessageToFirestore(messagePayload);
+
+    setSubmitting(false);
+
+    if (res.success) {
+      setLastSentData({
+        nombre: formData.nombre.trim(),
+        email: formData.email.trim(),
+        mensaje: formData.mensaje.trim(),
+      });
       setSubmitted(true);
       setIsCaptchaVerified(false);
       setAcceptedLegal(false);
-    }, 800);
+    } else {
+      setError(res.error || 'Ocurrió un error al registrar el mensaje. Puedes escribirme directamente por WhatsApp o correo.');
+    }
   };
 
   return (
@@ -120,21 +140,42 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ onOpenLegal }) =
             {/* Right Side: Contact Form */}
             <div className="lg:col-span-6 w-full">
               {submitted ? (
-                <div className="p-8 rounded-2xl bg-purple-950/40 border border-purple-500/40 text-center animate-in zoom-in-95 duration-200">
-                  <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
-                  <h3 className="text-xl font-bold text-white mb-2">¡Mensaje enviado con éxito!</h3>
-                  <p className="text-slate-300 text-sm mb-6">
-                    Gracias por ponerte en contacto. Te responderé lo más pronto posible para conversar sobre tu proyecto.
+                <div className="p-8 sm:p-10 rounded-2xl bg-purple-950/40 border border-purple-500/40 text-center animate-in zoom-in-95 duration-200">
+                  <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto mb-4 text-emerald-400">
+                    <CheckCircle className="w-9 h-9" />
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-bold text-white mb-2">¡Mensaje guardado y enviado con éxito!</h3>
+                  <p className="text-slate-300 text-sm mb-6 max-w-md mx-auto leading-relaxed">
+                    Tu mensaje ha sido registrado en mi bandeja de entrada de YorDev en Cloud Firestore y te responderé en breve a{' '}
+                    <span className="text-purple-300 font-semibold">{lastSentData?.email}</span>.
                   </p>
-                  <button
-                    onClick={() => {
-                      setSubmitted(false);
-                      setFormData({ nombre: '', email: '', mensaje: '' });
-                    }}
-                    className="px-5 py-2 rounded-xl text-xs font-semibold text-purple-300 bg-purple-900/60 hover:bg-purple-900"
-                  >
-                    Enviar otro mensaje
-                  </button>
+
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                    {socialLinks.whatsapp && (
+                      <a
+                        href={`${socialLinks.whatsapp}&text=${encodeURIComponent(
+                          `¡Hola Yorleidys! Acabo de enviarte un mensaje por tu portafolio web.\n\nNombre: ${lastSentData?.nombre || ''}\nCorreo: ${lastSentData?.email || ''}\n\nMensaje: ${lastSentData?.mensaje || ''}`
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-950/40 flex items-center justify-center gap-2 transition-all hover:scale-[1.02]"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        <span>Abrir también en WhatsApp</span>
+                      </a>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSubmitted(false);
+                        setFormData({ nombre: '', email: '', mensaje: '' });
+                      }}
+                      className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-semibold text-purple-300 bg-purple-900/60 hover:bg-purple-900 border border-purple-700/50 transition-colors"
+                    >
+                      Enviar otro mensaje
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4 text-left">
